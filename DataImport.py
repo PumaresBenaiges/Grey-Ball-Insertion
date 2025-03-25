@@ -1,4 +1,5 @@
 import os
+import os.path
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
@@ -12,6 +13,8 @@ def download_file(file_url, folder):
         folder: folder in our local computer where we want to store it
     """
     file_name_save = os.path.join(folder, os.path.basename(file_url))
+    if os.path.exists(file_name_save):
+        return
     try:
         # Send a GET request to download the file
         file_response = requests.get(file_url, timeout=30)
@@ -69,10 +72,12 @@ def download_shots():
         file_links = [urljoin(base_url, link['href']) for link in soup.find_all('a', href=True)
          if link['href'].lower().endswith('.nef')]
 
+        # Download files in parallel using ThreadPoolExecutor
+        folder = 'scenes_shots/' + folder
+
         # Create a directory to save files
         os.makedirs(folder, exist_ok=True)
 
-        # Download files in parallel using ThreadPoolExecutor
         max_workers = 64
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             executor.map(download_file, file_links, repeat(folder))
@@ -81,7 +86,7 @@ def download_shots():
 
 if __name__ == '__main__':
     print('Download of scenes starting')
-    download_scenes()
+    #download_scenes()
     print('Download of scenes finished')
 
     print('Download of shots starting')
