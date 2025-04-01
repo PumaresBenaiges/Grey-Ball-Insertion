@@ -96,7 +96,8 @@ def get_image_paths():
         for shot in os.listdir(shots_dir):
             output_path = os.path.join(shots_dir, shot)
             shot_id = os.path.splitext(shot)[0]
-            output_paths.append((scene_id, shot_id, output_path))
+            if shot_id in df['image_name'].values:
+                output_paths.append((scene_id, shot_id, output_path))
 
     print(f"Found {len(input_paths)} scenes.")
     print(f"Found {len(output_paths)} scene shots.")
@@ -157,17 +158,8 @@ if __name__ == '__main__':
     print('Input images loaded.')
     # ball_data.to_csv('ball_data.csv')
 
-    # Remove images with no data
-    new_output = []
-    for o_path in output_paths:
-        scene_id, shot_id, path = o_path
-        o_data = ball_data[ball_data['image_name'] == shot_id]
-        if not o_data.empty:
-            new_output.append(o_path)
-    print(f'Len of dataset {len(new_output)}.')
-
     # Create dataset and dataloader
-    dataset = SceneDataset(input_images, ball_data, new_output)
+    dataset = SceneDataset(input_images, ball_data, output_paths)
     #dataloader = DataLoader(dataset, batch_size=4, shuffle=True, num_workers=0, pin_memory=True)
 
     # Get one batch as example and check dataset is created correctly
