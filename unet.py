@@ -74,10 +74,11 @@ class UNet(nn.Module):
         return torch.sigmoid(self.final_conv(x))  # Sigmoid for normalized output (0-1)
 
 def train_model(model, dataloader, epochs=100):
+    print('hello: start trainning')
     model = model.cuda()
     criterion = nn.MSELoss()  # or nn.L1Loss() for pixel-wise error
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
-
+    print('hello: start trainning2')
     for epoch in range(epochs):
         for input_image, mask, target_image in dataloader:
             print(f"Epoch {epoch}")

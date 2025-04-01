@@ -1,6 +1,5 @@
 import os
 import rawpy
-import random
 import numpy as np
 import pandas as pd
 import torch
@@ -76,7 +75,7 @@ def get_image_paths():
     """
     Returns:
         - List of the paths for input images (scenes)
-        - List of the paths for output images (shots)
+        - List of the scene_id, shot_id and path for output images (shots)
         - Dataframe with ball data for all the shots
     """
     input_paths = []
@@ -109,27 +108,23 @@ class SceneDataset(Dataset):
     """
     - input_images: 30 images of scenes
     - df: dataframe with the ball data for all shots
-    - output_images_paths: paths for the shots images that will be loaded on the fly
+    - output_images_paths: contains list of scene_id, shot_id and path of the image (shot)
     """
     def __init__(self, input_images, df, output_images_paths, transform=None):
         self.input_images = input_images
         self.df = df
         self.output_images_paths = output_images_paths
         self.transform = transform
-        self.max_retries = 5
 
     def __len__(self):
         return len(self.output_images_paths)
 
-    def __getitem__(self, idx, retries=0):
+    def __getitem__(self, idx):
         """
         Each item of dataset is composed by:
         - Input image (scene)
         - Mask (ball position)
         - Output image (shot)
-
-        The mask is generated for each shot, if no data for the mask is found
-        we don't use that image of the dataset.
         """
         scene_id, shot_id, path = self.output_images_paths[idx]
         input_image = self.input_images[scene_id].copy()
@@ -138,19 +133,9 @@ class SceneDataset(Dataset):
 
         no_data = ball_data.empty
         if no_data:
-            print('NO data for image'+ scene_id+shot_id)
+            print('No data for image'+ scene_id+shot_id)
+
         # Generate mask for ball position
-        """if no_data:
-            print('no_data')
-            if retries >= self.max_retries :
-                print('F')
-                mask = np.zeros((IM_SIZE[0], IM_SIZE[1]), dtype=np.float32)
-                return input_image, mask, output_image
-
-            new_idx = random.randit(0, len(self.output_images_paths)-1)
-            print(f'Warning: no ball data for {shot_id}')
-            return self.__getitem__(new_idx, retries+1)"""
-
         mask = create_probability_map(ball_data)
 
         # Normalize or transform images
@@ -169,25 +154,26 @@ class SceneDataset(Dataset):
 if __name__ == '__main__':
     input_paths, ball_data, output_paths = get_image_paths()
     input_images = load_input_scenes(input_paths)
-    print('input images loaded')
-    ball_data.to_csv('ball_data.csv')
-    print(len(output_paths))
-    new_output=[]
-    for opath in output_paths:
-        scene_id, shot_id, path = opath
+    print('Input images loaded.')
+    # ball_data.to_csv('ball_data.csv')
+
+    # Remove images with no data
+    new_output = []
+    for o_path in output_paths:
+        scene_id, shot_id, path = o_path
         o_data = ball_data[ball_data['image_name'] == shot_id]
         if not o_data.empty:
-            new_output.append(opath)
-    print(len(new_output))
+            new_output.append(o_path)
+    print(f'Len of dataset {len(new_output)}.')
 
     # Create dataset and dataloader
-    dataset = SceneDataset(input_images, ball_data, output_paths)
+    dataset = SceneDataset(input_images, ball_data, new_output)
     #dataloader = DataLoader(dataset, batch_size=4, shuffle=True, num_workers=0, pin_memory=True)
 
     # Get one batch as example and check dataset is created correctly
-    for i in range(10):
-        dataloader = DataLoader(dataset, batch_size=32, shuffle=True, num_workers=4)
-        print(f'done {i}')
+
+    dataloader = DataLoader(dataset, batch_size=4, shuffle=True, num_workers=1, pin_memory=True)
+
     for batch_idx, (input_images, masks, output_images) in enumerate(dataloader):
         print(f"Batch {batch_idx}")
         print(f"Input images shape: {input_images.shape}")  # (B, 3, H, W)
@@ -198,9 +184,9 @@ if __name__ == '__main__':
         print(f"Mask range: {masks.min()} - {masks.max()}")
 
         # Save grid of images
-        vutils.save_image(input_images, 'input_samples.png', nrow=4, normalize=True)
-        vutils.save_image(masks, 'mask_samples.png', nrow=4, normalize=True)
-        vutils.save_image(output_images, 'output_samples.png', nrow=4, normalize=True)
+        # vutils.save_image(input_images, 'input_samples.png', nrow=4, normalize=True)
+        # vutils.save_image(masks, 'mask_samples.png', nrow=4, normalize=True)
+        # vutils.save_image(output_images, 'output_samples.png', nrow=4, normalize=True)
 
         if batch_idx == 0:  # check only first batch
             break
