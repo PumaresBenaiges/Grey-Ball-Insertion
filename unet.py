@@ -80,6 +80,7 @@ def train_model(model, dataloader, epochs=100):
 
     for epoch in range(epochs):
         for input_image, mask, target_image in dataloader:
+            print(f"Epoch {epoch}")
             input_image, mask, target_image = input_image.cuda(), mask.cuda(), target_image.cuda()
             input = torch.cat([input_image, mask], dim=1)
 
@@ -101,10 +102,19 @@ if __name__ == '__main__':
     # Create  dataset and dataloader
     input_paths, ball_data, output_paths = DC.get_image_paths()
     input_images = DC.load_input_scenes(input_paths)
-    dataset = DC.SceneDataset(input_images, ball_data, output_paths)
+    new_output = []
+    for opath in output_paths:
+        scene_id, shot_id, path = opath
+        o_data = ball_data[ball_data['image_name'] == shot_id]
+        if not o_data.empty:
+            new_output.append(opath)
+    print(len(new_output))
+    new_output = new_output[:64]
+
+    dataset = DC.SceneDataset(input_images, ball_data, new_output)
     dataloader = DC.DataLoader(dataset, batch_size=32, shuffle=True, num_workers=16, pin_memory=True)
     print('Dataloader Created')
     # Create and train model
     model = UNet(input_channels=4, output_channels=3)
     print('Model Created')
-    train_model(model, dataloader, 100)
+    train_model(model, dataloader, 5)

@@ -136,8 +136,12 @@ class SceneDataset(Dataset):
         output_image = load_image(path)
         ball_data = self.df[self.df['image_name'] == shot_id]
 
+        no_data = ball_data.empty
+        if no_data:
+            print('NO data for image'+ scene_id+shot_id)
         # Generate mask for ball position
-        if ball_data.empty:
+        """if no_data:
+            print('no_data')
             if retries >= self.max_retries :
                 print('F')
                 mask = np.zeros((IM_SIZE[0], IM_SIZE[1]), dtype=np.float32)
@@ -145,7 +149,7 @@ class SceneDataset(Dataset):
 
             new_idx = random.randit(0, len(self.output_images_paths)-1)
             print(f'Warning: no ball data for {shot_id}')
-            return self.__getitem__(new_idx, retries+1)
+            return self.__getitem__(new_idx, retries+1)"""
 
         mask = create_probability_map(ball_data)
 
@@ -167,13 +171,23 @@ if __name__ == '__main__':
     input_images = load_input_scenes(input_paths)
     print('input images loaded')
     ball_data.to_csv('ball_data.csv')
+    print(len(output_paths))
+    new_output=[]
+    for opath in output_paths:
+        scene_id, shot_id, path = opath
+        o_data = ball_data[ball_data['image_name'] == shot_id]
+        if not o_data.empty:
+            new_output.append(opath)
+    print(len(new_output))
 
     # Create dataset and dataloader
     dataset = SceneDataset(input_images, ball_data, output_paths)
     #dataloader = DataLoader(dataset, batch_size=4, shuffle=True, num_workers=0, pin_memory=True)
 
     # Get one batch as example and check dataset is created correctly
-    dataloader = DataLoader(dataset, batch_size=4, shuffle=True, num_workers=4)
+    for i in range(10):
+        dataloader = DataLoader(dataset, batch_size=32, shuffle=True, num_workers=4)
+        print(f'done {i}')
     for batch_idx, (input_images, masks, output_images) in enumerate(dataloader):
         print(f"Batch {batch_idx}")
         print(f"Input images shape: {input_images.shape}")  # (B, 3, H, W)

@@ -1,110 +1,123 @@
-# from . import config
-from torch.nn import ConvTranspose2d
-from torch.nn import Conv2d
-from torch.nn import MaxPool2d
-from torch.nn import Module
-from torch.nn import ModuleList
-from torch.nn import ReLU
-from torchvision.transforms import CenterCrop
-from torch.nn import functional as F
+""" Parts of the U-Net model """
+
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
 
-class Block(Module):
-	def __init__(self, inChannels=4, outChannels=3):
-		super().__init__()
-		# store the convolution and RELU layers
-		self.conv1 = Conv2d(inChannels, outChannels, 3)
-		self.relu = ReLU()
-		self.conv2 = Conv2d(outChannels, outChannels, 3)
-	def forward(self, x):
-		# apply CONV => RELU => CONV block to the inputs and return it
-		return self.conv2(self.relu(self.conv1(x)))
+class DoubleConv(nn.Module):
+    """(convolution => [BN] => ReLU) * 2"""
 
-class Decoder(Module):
-	def __init__(self, channels=(64, 32, 16)):
-		super().__init__()
-		# initialize the number of channels, upsampler blocks, and
-		# decoder blocks
-		self.channels = channels
-		self.upconvs = ModuleList(
-			[ConvTranspose2d(channels[i], channels[i + 1], 2, 2)
-			 	for i in range(len(channels) - 1)])
-		self.dec_blocks = ModuleList(
-			[Block(channels[i], channels[i + 1])
-			 	for i in range(len(channels) - 1)])
+    def __init__(self, in_channels, out_channels, mid_channels=None):
+        super().__init__()
+        if not mid_channels:
+            mid_channels = out_channels
+        self.double_conv = nn.Sequential(
+            nn.Conv2d(in_channels, mid_channels, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(mid_channels),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(mid_channels, out_channels, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True)
+        )
 
-	def forward(self, x, encFeatures):
-		# loop through the number of channels
-		for i in range(len(self.channels) - 1):
-			# pass the inputs through the upsampler blocks
-			x = self.upconvs[i](x)
-			# crop the current features from the encoder blocks,
-			# concatenate them with the current upsampled features,
-			# and pass the concatenated output through the current
-			# decoder block
-			encFeat = self.crop(encFeatures[i], x)
-			x = torch.cat([x, encFeat], dim=1)
-			x = self.dec_blocks[i](x)
-		# return the final decoder output
-		return x
+    def forward(self, x):
+        return self.double_conv(x)
 
-	def crop(self, encFeatures, x):
-		# grab the dimensions of the inputs, and crop the encoder
-		# features to match the dimensions
-		(_, _, H, W) = x.shape
-		encFeatures = CenterCrop([H, W])(encFeatures)
-		# return the cropped features
-		return encFeatures
 
-class Encoder(Module):
-	def __init__(self, channels=(3, 16, 32, 64)):
-		super().__init__()
-		# store the encoder blocks and maxpooling layer
-		self.encBlocks = ModuleList(
-			[Block(channels[i], channels[i + 1])
-			 	for i in range(len(channels) - 1)])
-		self.pool = MaxPool2d(2)
-	def forward(self, x):
-		# initialize an empty list to store the intermediate outputs
-		blockOutputs = []
-		# loop through the encoder blocks
-		for block in self.encBlocks:
-			# pass the inputs through the current encoder block, store
-			# the outputs, and then apply maxpooling on the output
-			x = block(x)
-			blockOutputs.append(x)
-			x = self.pool(x)
-		# return the list containing the intermediate outputs
-		return blockOutputs
+class Down(nn.Module):
+    """Downscaling with maxpool then double conv"""
 
-class UNet(Module):
-	def __init__(self, encChannels=(3, 16, 32, 64),
-		 decChannels=(64, 32, 16),
-		 nbClasses=1, retainDim=True,
-		 outSize=(config.INPUT_IMAGE_HEIGHT,  config.INPUT_IMAGE_WIDTH)):
-		super().__init__()
-		# initialize the encoder and decoder
-		self.encoder = Encoder(encChannels)
-		self.decoder = Decoder(decChannels)
-		# initialize the regression head and store the class variables
-		self.head = Conv2d(decChannels[-1], nbClasses, 1)
-		self.retainDim = retainDim
-		self.outSize = outSize
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+        self.maxpool_conv = nn.Sequential(
+            nn.MaxPool2d(2),
+            DoubleConv(in_channels, out_channels)
+        )
 
-	def forward(self, x):
-		# grab the features from the encoder
-		encFeatures = self.encoder(x)
-		# pass the encoder features through decoder making sure that
-		# their dimensions are suited for concatenation
-		decFeatures = self.decoder(encFeatures[::-1][0],
-								   encFeatures[::-1][1:])
-		# pass the decoder features through the regression head to
-		# obtain the segmentation mask
-		map = self.head(decFeatures)
-		# check to see if we are retaining the original output
-		# dimensions and if so, then resize the output to match them
-		if self.retainDim:
-			map = F.interpolate(map, self.outSize)
-		# return the segmentation map
-		return map
+    def forward(self, x):
+        return self.maxpool_conv(x)
+
+
+class Up(nn.Module):
+    """Upscaling then double conv"""
+
+    def __init__(self, in_channels, out_channels, bilinear=True):
+        super().__init__()
+
+        # if bilinear, use the normal convolutions to reduce the number of channels
+        if bilinear:
+            self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+            self.conv = DoubleConv(in_channels, out_channels, in_channels // 2)
+        else:
+            self.up = nn.ConvTranspose2d(in_channels, in_channels // 2, kernel_size=2, stride=2)
+            self.conv = DoubleConv(in_channels, out_channels)
+
+    def forward(self, x1, x2):
+        x1 = self.up(x1)
+        # input is CHW
+        diffY = x2.size()[2] - x1.size()[2]
+        diffX = x2.size()[3] - x1.size()[3]
+
+        x1 = F.pad(x1, [diffX // 2, diffX - diffX // 2,
+                        diffY // 2, diffY - diffY // 2])
+        # if you have padding issues, see
+        # https://github.com/HaiyongJiang/U-Net-Pytorch-Unstructured-Buggy/commit/0e854509c2cea854e247a9c615f175f76fbb2e3a
+        # https://github.com/xiaopeng-liao/Pytorch-UNet/commit/8ebac70e633bac59fc22bb5195e513d5832fb3bd
+        x = torch.cat([x2, x1], dim=1)
+        return self.conv(x)
+
+
+class OutConv(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(OutConv, self).__init__()
+        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=1)
+
+    def forward(self, x):
+        return self.conv(x)
+
+
+""" Full assembly of the parts to form the complete network """
+class UNet(nn.Module):
+    def __init__(self, n_channels, n_classes, bilinear=False):
+        super(UNet, self).__init__()
+        self.n_channels = n_channels
+        self.n_classes = n_classes
+        self.bilinear = bilinear
+
+        self.inc = (DoubleConv(n_channels, 64))
+        self.down1 = (Down(64, 128))
+        self.down2 = (Down(128, 256))
+        self.down3 = (Down(256, 512))
+        factor = 2 if bilinear else 1
+        self.down4 = (Down(512, 1024 // factor))
+        self.up1 = (Up(1024, 512 // factor, bilinear))
+        self.up2 = (Up(512, 256 // factor, bilinear))
+        self.up3 = (Up(256, 128 // factor, bilinear))
+        self.up4 = (Up(128, 64, bilinear))
+        self.outc = (OutConv(64, n_classes))
+
+    def forward(self, x):
+        x1 = self.inc(x)
+        x2 = self.down1(x1)
+        x3 = self.down2(x2)
+        x4 = self.down3(x3)
+        x5 = self.down4(x4)
+        x = self.up1(x5, x4)
+        x = self.up2(x, x3)
+        x = self.up3(x, x2)
+        x = self.up4(x, x1)
+        logits = self.outc(x)
+        return logits
+
+    def use_checkpointing(self):
+        self.inc = torch.utils.checkpoint(self.inc)
+        self.down1 = torch.utils.checkpoint(self.down1)
+        self.down2 = torch.utils.checkpoint(self.down2)
+        self.down3 = torch.utils.checkpoint(self.down3)
+        self.down4 = torch.utils.checkpoint(self.down4)
+        self.up1 = torch.utils.checkpoint(self.up1)
+        self.up2 = torch.utils.checkpoint(self.up2)
+        self.up3 = torch.utils.checkpoint(self.up3)
+        self.up4 = torch.utils.checkpoint(self.up4)
+        self.outc = torch.utils.checkpoint(self.outc)
