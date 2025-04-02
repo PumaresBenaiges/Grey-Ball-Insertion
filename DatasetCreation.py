@@ -3,20 +3,23 @@ import rawpy
 import numpy as np
 import pandas as pd
 import torch
+import cv2
+from matplotlib.image import interpolations_names
 from torch.utils.data import Dataset, DataLoader
 import torchvision.utils as vutils
 
 IM_SIZE=(2844,4284,3)
+NEW_SIZE=(2848,4288)
 
 def load_image(path):
     """
     Args:
         path: path of one image to load.
 
-    Reads the image from the path and preprocesses it.
+    Reads the image from the path, preprocesses it and resizes.
 
     Returns:
-        (Preprocessed) image.
+        Preprocessed and resized image.
     """
     # Load and process input image (scene)
     with rawpy.imread(path) as raw:
@@ -24,6 +27,7 @@ def load_image(path):
         height, width, channels = image.shape
         if width < height:
             image = np.rot90(image)
+        image = cv2.resize(image, NEW_SIZE, interpolation=cv2.INTER_AREA)
     return image
 
 def load_input_scenes(input_paths):
@@ -68,7 +72,7 @@ def create_probability_map(df, binary=True):
     else: # Gaussian probability map
         mask = np.exp(-dist ** 2 / (2 * (radius / 2) ** 2))
         mask = mask.astype(np.float32)
-
+    mask = cv2.resize(mask, NEW_SIZE, interpolation=cv2.INTER_AREA)
     return mask
 
 def get_image_paths():
@@ -111,11 +115,10 @@ class SceneDataset(Dataset):
     - df: dataframe with the ball data for all shots
     - output_images_paths: contains list of scene_id, shot_id and path of the image (shot)
     """
-    def __init__(self, input_images, df, output_images_paths, transform=None):
+    def __init__(self, input_images, df, output_images_paths):
         self.input_images = input_images
         self.df = df
         self.output_images_paths = output_images_paths
-        self.transform = transform
 
     def __len__(self):
         return len(self.output_images_paths)
@@ -132,23 +135,16 @@ class SceneDataset(Dataset):
         output_image = load_image(path)
         ball_data = self.df[self.df['image_name'] == shot_id]
 
-        no_data = ball_data.empty
-        if no_data:
+        if ball_data.empty:
             print('No data for image'+ scene_id+shot_id)
 
         # Generate mask for ball position
         mask = create_probability_map(ball_data)
 
-        # Normalize or transform images
-        if self.transform:
-            input_image = self.transform(input_image)
-            output_image = self.transform(output_image)
-            mask = torch.from_numpy(mask).unsqueeze(0)  # Add channel dimension for mask
-        else:
-            # Convert to tensor and normalize to [0, 1]
-            input_image = torch.from_numpy(input_image).permute(2, 0, 1).float() / 255.0
-            output_image = torch.from_numpy(output_image).permute(2, 0, 1).float() / 255.0
-            mask = torch.from_numpy(mask).unsqueeze(0).float()  # (1, H, W)
+        # Convert to tensor and normalize to [0, 1]
+        input_image = torch.from_numpy(input_image).permute(2, 0, 1).float() / 255.0
+        output_image = torch.from_numpy(output_image).permute(2, 0, 1).float() / 255.0
+        mask = torch.from_numpy(mask).unsqueeze(0).float()  # (1, H, W)
 
         return input_image, mask, output_image
 
@@ -161,10 +157,9 @@ if __name__ == '__main__':
     # Create dataset and dataloader
     dataset = SceneDataset(input_images, ball_data, output_paths)
     #dataloader = DataLoader(dataset, batch_size=4, shuffle=True, num_workers=0, pin_memory=True)
-
+    print(dataset[0])
     # Get one batch as example and check dataset is created correctly
-
-    dataloader = DataLoader(dataset, batch_size=4, shuffle=True, num_workers=1, pin_memory=True)
+    dataloader = DataLoader(dataset, batch_size=1, shuffle=True, num_workers=0, pin_memory=True)
 
     for batch_idx, (input_images, masks, output_images) in enumerate(dataloader):
         print(f"Batch {batch_idx}")

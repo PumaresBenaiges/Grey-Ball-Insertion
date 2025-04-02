@@ -1,9 +1,6 @@
 import torch
 import torch.nn as nn
-import torch.optim as optim
 import torch.nn.functional as F
-import DatasetCreation as DC
-from torchvision.utils import save_image
 
 
 class UNet(nn.Module):
@@ -73,49 +70,148 @@ class UNet(nn.Module):
 
         return torch.sigmoid(self.final_conv(x))  # Sigmoid for normalized output (0-1)
 
-def train_model(model, dataloader, epochs=100):
-    print('hello: start trainning')
-    model = model.cuda()
-    criterion = nn.MSELoss()  # or nn.L1Loss() for pixel-wise error
-    optimizer = optim.Adam(model.parameters(), lr=1e-4)
-    print('hello: start trainning2')
-    for epoch in range(epochs):
-        for input_image, mask, target_image in dataloader:
-            print(f"Epoch {epoch}")
-            input_image, mask, target_image = input_image.cuda(), mask.cuda(), target_image.cuda()
-            input = torch.cat([input_image, mask], dim=1)
+class SmallUNet(nn.Module):
+    def __init__(self, input_channels=4, output_channels=3):
+        super(SmallUNet, self).__init__()
 
-            # Forward pass
-            output = model(input)
-            loss = criterion(output, target_image)
+        features = [32, 64, 128, 256]  # Smaller number of filters
 
-            # Backpropagation
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-        # Example inside training loop
-        if epoch in (1, 25, 50, 75, 99):
-            save_image(torch.cat((output[:4], target_image[:4]), dim=0), f"comparison{epoch}.jpg", nrow=4, normalize=True)
-        print(f"Epoch {epoch}, Loss: {loss.item()}")
+        # Encoder (Downsampling)
+        self.encoder = nn.ModuleList()
+        for feature in features:
+            self.encoder.append(self._block(input_channels, feature))
+            input_channels = feature
 
-if __name__ == '__main__':
+        # Bottleneck (Fixed: Doesn't increase channels)
+        self.bottleneck = self._block(features[-1], features[-1])
 
-    # Create  dataset and dataloader
-    input_paths, ball_data, output_paths = DC.get_image_paths()
-    input_images = DC.load_input_scenes(input_paths)
-    new_output = []
-    for opath in output_paths:
-        scene_id, shot_id, path = opath
-        o_data = ball_data[ball_data['image_name'] == shot_id]
-        if not o_data.empty:
-            new_output.append(opath)
-    print(len(new_output))
-    new_output = new_output[:64]
+        # Decoder (Upsampling - Fixed to match correct number of channels)
+        self.decoder = nn.ModuleList()
+        for feature in reversed(features[:-1]):  # Avoid doubling channels
+            self.decoder.append(nn.ConvTranspose2d(feature * 2, feature, kernel_size=2, stride=2))
+            self.decoder.append(self._block(feature * 2, feature))
 
-    dataset = DC.SceneDataset(input_images, ball_data, new_output)
-    dataloader = DC.DataLoader(dataset, batch_size=32, shuffle=True, num_workers=16, pin_memory=True)
-    print('Dataloader Created')
-    # Create and train model
-    model = UNet(input_channels=4, output_channels=3)
-    print('Model Created')
-    train_model(model, dataloader, 5)
+        # Final output layer
+        self.final_conv = nn.Conv2d(features[0], output_channels, kernel_size=1)
+
+    def _block(self, in_channels, out_channels):
+        """Fixed convolutional block."""
+        return nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True)
+        )
+
+    def forward(self, x):
+        skip_connections = []
+
+        # Downsampling
+        for down in self.encoder:
+            x = down(x)
+            skip_connections.append(x)
+            x = F.avg_pool2d(x, kernel_size=2, stride=2)  # More memory-efficient than max pooling
+
+        x = self.bottleneck(x)
+
+        # Upsampling (Fix: Skip last layer in reversed encoder)
+        skip_connections = skip_connections[::-1]
+        for idx in range(0, len(self.decoder), 2):
+            x = self.decoder[idx](x)  # Transposed Conv
+            skip_connection = skip_connections[idx // 2 + 1]  # Fix indexing to match shapes
+
+            if x.shape != skip_connection.shape:
+                x = F.interpolate(x, size=skip_connection.shape[2:])  # Ensure proper shape
+
+            x = torch.cat((skip_connection, x), dim=1)  # Concatenate
+            x = self.decoder[idx + 1](x)
+
+        return torch.sigmoid(self.final_conv(x))  # Normalize output
+
+
+
+
+class DoubleConv(nn.Module):
+    def __init__(self, in_ch, out_ch):
+        super(DoubleConv, self).__init__()
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_ch),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_ch, out_ch, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_ch),
+            nn.ReLU(inplace=True),
+        )
+
+    def forward(self, x):
+        x = self.conv(x)
+        return x
+
+
+class Up(nn.Module):
+    def __init__(self, in_ch, out_ch):
+        super(Up, self).__init__()
+        self.up_scale = nn.ConvTranspose2d(in_ch, out_ch, kernel_size=2, stride=2)
+
+    def forward(self, x1, x2):
+        x2 = self.up_scale(x2)
+
+        diffY = x1.size()[2] - x2.size()[2]
+        diffX = x1.size()[3] - x2.size()[3]
+
+        x2 = F.pad(x2, [diffX // 2, diffX - diffX // 2, diffY // 2, diffY - diffY // 2])
+        x = torch.cat([x2, x1], dim=1)
+        return x
+
+
+class DownLayer(nn.Module):
+    def __init__(self, in_ch, out_ch):
+        super(DownLayer, self).__init__()
+        self.pool = nn.MaxPool2d(2, stride=2, padding=0)
+        self.conv = DoubleConv(in_ch, out_ch)
+
+    def forward(self, x):
+        x = self.conv(self.pool(x))
+        return x
+
+
+class UpLayer(nn.Module):
+    def __init__(self, in_ch, out_ch):
+        super(UpLayer, self).__init__()
+        self.up = Up(in_ch, out_ch)
+        self.conv = DoubleConv(in_ch, out_ch)
+
+    def forward(self, x1, x2):
+        a = self.up(x1, x2)
+        x = self.conv(a)
+        return x
+
+
+class UNet2(nn.Module):
+    def __init__(self, inc=4, outc=3):
+        super(UNet2, self).__init__()
+        self.conv1 = DoubleConv(inc, 64)
+        self.down1 = DownLayer(64, 128)
+        self.down2 = DownLayer(128, 256)
+        self.down3 = DownLayer(256, 512)
+        # self.down4 = DownLayer(512, 1024)
+        # self.up1 = UpLayer(1024, 512)
+        self.up2 = UpLayer(512, 256)
+        self.up3 = UpLayer(256, 128)
+        self.up4 = UpLayer(128, 64)
+        self.last_conv = nn.Conv2d(64, outc, 1)
+        self.activation = nn.Sigmoid() # to get output normalized images
+
+    def forward(self, x):
+        x1 = self.conv1(x)
+        x2 = self.down1(x1)
+        x3 = self.down2(x2)
+        x4 = self.down3(x3)
+        # x5 = self.down4(x4)
+        # x1_up = self.up1(x4, x5)
+        x2_up = self.up2(x3, x4)
+        x3_up = self.up3(x2, x2_up)
+        x4_up = self.up4(x1, x3_up)
+        output = self.last_conv(x4_up)
+        return output
+
+
