@@ -9,7 +9,8 @@ from torch.utils.data import Dataset, DataLoader
 import torchvision.utils as vutils
 
 IM_SIZE=(2844,4284,3)
-NEW_SIZE=(2848,4288)
+# NEW_SIZE=(2848,4288)
+NEW_SIZE=(256,256)
 
 def load_image(path):
     """
@@ -82,14 +83,15 @@ def get_image_paths():
         - List of the scene_id, shot_id and path for output images (shots)
         - Dataframe with ball data for all the shots
     """
-    input_paths = []
+    input_paths = {}
     output_paths = []
     ball_data = pd.DataFrame()
 
     # Go over each scene
     for scene in os.listdir('scenes'):
         input_path = os.path.join('scenes', scene)
-        input_paths.append(input_path)
+        scene_id = os.path.basename(input_path)[:-4]
+        input_paths[scene_id] = input_path
         scene_id = os.path.splitext(scene)[0]
         shots_dir = os.path.join('scenes_shots', scene_id)
 
@@ -131,7 +133,8 @@ class SceneDataset(Dataset):
         - Output image (shot)
         """
         scene_id, shot_id, path = self.output_images_paths[idx]
-        input_image = self.input_images[scene_id].copy()
+        # input_image = self.input_images[scene_id].copy()
+        input_image =load_image(self.input_images[scene_id])
         output_image = load_image(path)
         ball_data = self.df[self.df['image_name'] == shot_id]
 

@@ -6,3 +6,4 @@ ball_data.csv
 *.png
 .venv/
 .idea/
+*jpg

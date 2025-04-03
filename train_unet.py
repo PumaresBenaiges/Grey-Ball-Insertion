@@ -16,7 +16,7 @@ def train_model(model, dataloader, epochs=100):
         print(f"Epoch {epoch + 1}/{epochs}")
         epoch_loss = 0.0  # Track total loss for averaging
         for idx, (input_image, mask, target_image) in enumerate(dataloader):
-            print(f"Batch {idx}")
+            # print(f"Batch {idx}")
             input_image, mask, target_image = input_image.to(device), mask.to(device), target_image.to(device)
             input_tensor = torch.cat([input_image, mask], dim=1)
 
@@ -31,18 +31,19 @@ def train_model(model, dataloader, epochs=100):
             epoch_loss += loss.item()
 
         # Example inside training loop
-        if epoch in (1, 25, 50, 75, 99):
+        if epoch in (1, 25, 50, 75, 99, epochs-1):
             save_image(torch.cat((output[:4], target_image[:4]), dim=0), f"comparison{epoch}.jpg", nrow=4, normalize=True)
-        print(f"Epoch {epoch}, Loss: {loss.item()}")
+        print(f"Epoch {epoch + 1}, Average Loss: {epoch_loss / len(dataloader)}")
+
 
 if __name__ == '__main__':
 
     # Create  dataset and dataloader
     input_paths, ball_data, output_paths = DC.get_image_paths()
-    input_images = DC.load_input_scenes(input_paths)
+    # input_images = DC.load_input_scenes(input_paths)
     new_output = output_paths[:64]
-    dataset = DC.SceneDataset(input_images, ball_data, output_paths)
-    dataloader = DC.DataLoader(dataset, batch_size=1, shuffle=True, num_workers=0, pin_memory=True)
+    dataset = DC.SceneDataset(input_paths, ball_data, output_paths)
+    dataloader = DC.DataLoader(dataset, batch_size=8, shuffle=True, num_workers=0, pin_memory=True)
     print('Dataloader Created')
 
     # Create and train model
@@ -51,3 +52,10 @@ if __name__ == '__main__':
     print('Model Created')
     torch.cuda.empty_cache()
     train_model(model, dataloader, 5)
+
+    # How to make it faster
+    # load 31 input images from beggining
+    # Fix num_workers
+    # Increase batch size
+    # Clean memory
+    # Resize images
