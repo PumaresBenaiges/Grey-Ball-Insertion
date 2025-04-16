@@ -12,6 +12,31 @@ IM_SIZE=(2844,4284,3)
 # NEW_SIZE=(2848,4288)
 NEW_SIZE=(256,256)
 
+
+def crop_center(image, ball_data, crop_size=(256, 256)):
+    """
+    Crops the image with the provided crop_size centered at 'center'.
+    If the crop goes out of bounds, the region is padded (or resized afterward).
+    """
+    crop_h, crop_w = crop_size
+    cx = ball_data['circle_x']
+    cy = ball_data['circle_y']
+    # Compute top-left corner
+    start_x = int((cx - crop_w // 2).iloc[0])
+    start_y = int((cy - crop_h // 2).iloc[0])
+    # Get full image dimensions
+    img_h, img_w = image.shape[:2]
+    # Clip crop coordinates to image boundaries
+    start_x = max(start_x, 0)
+    start_y = max(start_y, 0)
+    end_x = min(start_x + crop_w, img_w)
+    end_y = min(start_y + crop_h, img_h)
+    cropped = image[start_y:end_y, start_x:end_x]
+    # In case the crop is smaller than desired, use resizing (or you might pad instead)
+    if (cropped.shape[0] != crop_h) or (cropped.shape[1] != crop_w):
+        cropped = cv2.resize(cropped, (crop_w, crop_h), interpolation=cv2.INTER_AREA)
+    return cropped
+
 def load_image(path):
     """
     Args:
@@ -28,7 +53,6 @@ def load_image(path):
         height, width, channels = image.shape
         if width < height:
             image = np.rot90(image)
-        image = cv2.resize(image, NEW_SIZE, interpolation=cv2.INTER_AREA)
     return image
 
 def load_input_scenes(input_paths):
@@ -40,9 +64,9 @@ def load_input_scenes(input_paths):
     """
     # TODO preprocessing, normalization (done afterwards)?
     # Load and process input image
+    # Changed. How does it saves path?
     input_images = {}
-    for input_path in input_paths:
-        scene_id = os.path.basename(input_path)[:-4]
+    for index, (scene_id, input_path) in enumerate(input_paths.items()):
         input_image = load_image(input_path)
         input_images[scene_id] = input_image
     return input_images
@@ -133,10 +157,10 @@ class SceneDataset(Dataset):
         - Output image (shot)
         """
         scene_id, shot_id, path = self.output_images_paths[idx]
-        # input_image = self.input_images[scene_id].copy()
-        input_image =load_image(self.input_images[scene_id])
-        output_image = load_image(path)
         ball_data = self.df[self.df['image_name'] == shot_id]
+        input_image = crop_center(self.input_images[scene_id], ball_data, NEW_SIZE)
+        output_image = load_image(path)
+        output_image = crop_center(output_image, ball_data, NEW_SIZE)
 
         if ball_data.empty:
             print('No data for image'+ scene_id+shot_id)
