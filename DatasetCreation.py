@@ -13,7 +13,7 @@ IM_SIZE=(2844,4284,3)
 NEW_SIZE=(256,256)
 
 
-def crop_center(image, ball_data, crop_size=(256, 256)):
+def crop_center(image, ball_data, crop_size=(64, 64)):
     """
     Crops the image with the provided crop_size centered at 'center'.
     If the crop goes out of bounds, the region is padded (or resized afterward).
@@ -62,7 +62,6 @@ def load_input_scenes(input_paths):
     Returns:
         Dictionary with scene_id and loaded image.
     """
-    # TODO preprocessing, normalization (done afterwards)?
     # Load and process input image
     # Changed. How does it saves path?
     input_images = {}
@@ -103,7 +102,7 @@ def create_probability_map(df, binary=True):
 def get_image_paths():
     """
     Returns:
-        - List of the paths for input images (scenes)
+        - Dictionary of the paths for input images (scenes)
         - List of the scene_id, shot_id and path for output images (shots)
         - Dataframe with ball data for all the shots
     """
@@ -153,27 +152,31 @@ class SceneDataset(Dataset):
         """
         Each item of dataset is composed by:
         - Input image (scene)
+        - Input image cropped (scene)
         - Mask (ball position)
         - Output image (shot)
         """
         scene_id, shot_id, path = self.output_images_paths[idx]
         ball_data = self.df[self.df['image_name'] == shot_id]
-        input_image = crop_center(self.input_images[scene_id], ball_data, NEW_SIZE)
+        input_image_cropped = crop_center(self.input_images[scene_id], ball_data, NEW_SIZE)
         output_image = load_image(path)
         output_image = crop_center(output_image, ball_data, NEW_SIZE)
+
+        input_image = cv2.resize(self.input_images[scene_id], (224,224), interpolation=cv2.INTER_AREA)
 
         if ball_data.empty:
             print('No data for image'+ scene_id+shot_id)
 
         # Generate mask for ball position
-        mask = create_probability_map(ball_data)
+        # mask = create_probability_map(ball_data)
 
         # Convert to tensor and normalize to [0, 1]
         input_image = torch.from_numpy(input_image).permute(2, 0, 1).float() / 255.0
+        input_image_cropped = torch.from_numpy(input_image_cropped).permute(2, 0, 1).float() / 255.0
         output_image = torch.from_numpy(output_image).permute(2, 0, 1).float() / 255.0
-        mask = torch.from_numpy(mask).unsqueeze(0).float()  # (1, H, W)
+        # mask = torch.from_numpy(mask).unsqueeze(0).float()  # (1, H, W)
 
-        return input_image, mask, output_image
+        return input_image, input_image_cropped, output_image
 
 if __name__ == '__main__':
     input_paths, ball_data, output_paths = get_image_paths()
@@ -198,9 +201,9 @@ if __name__ == '__main__':
         print(f"Mask range: {masks.min()} - {masks.max()}")
 
         # Save grid of images
-        # vutils.save_image(input_images, 'input_samples.png', nrow=4, normalize=True)
-        # vutils.save_image(masks, 'mask_samples.png', nrow=4, normalize=True)
-        # vutils.save_image(output_images, 'output_samples.png', nrow=4, normalize=True)
+        vutils.save_image(input_images, 'input_samples.png', nrow=4, normalize=True)
+        vutils.save_image(masks, 'mask_samples.png', nrow=4, normalize=True)
+        vutils.save_image(output_images, 'output_samples.png', nrow=4, normalize=True)
 
         if batch_idx == 0:  # check only first batch
             break

@@ -7,3 +7,4 @@ ball_data.csv
 .venv/
 .idea/
 *jpg
+model_visualization

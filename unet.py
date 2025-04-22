@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torchvision import models
 
 
 class UNet(nn.Module):
@@ -128,8 +129,7 @@ class SmallUNet(nn.Module):
         return torch.sigmoid(self.final_conv(x))  # Normalize output
 
 
-
-
+# Model that we are currently using
 class DoubleConv(nn.Module):
     def __init__(self, in_ch, out_ch):
         super(DoubleConv, self).__init__()
@@ -146,7 +146,6 @@ class DoubleConv(nn.Module):
         x = self.conv(x)
         return x
 
-
 class Up(nn.Module):
     def __init__(self, in_ch, out_ch):
         super(Up, self).__init__()
@@ -162,7 +161,6 @@ class Up(nn.Module):
         x = torch.cat([x2, x1], dim=1)
         return x
 
-
 class DownLayer(nn.Module):
     def __init__(self, in_ch, out_ch):
         super(DownLayer, self).__init__()
@@ -172,7 +170,6 @@ class DownLayer(nn.Module):
     def forward(self, x):
         x = self.conv(self.pool(x))
         return x
-
 
 class UpLayer(nn.Module):
     def __init__(self, in_ch, out_ch):
@@ -185,33 +182,83 @@ class UpLayer(nn.Module):
         x = self.conv(a)
         return x
 
+"""class VGGFeatures(nn.Module):
+    def __init__(self):
+        super(VGGFeatures, self).__init__()
+        vgg = models.vgg16(weights=models.VGG16_Weights.DEFAULT)
+        self.features = vgg.features
+        self.avgpool = vgg.avgpool
+        self.fc = nn.Sequential(*list(vgg.classifier.children())[:-1])  # Up to fc7 (4096) remove last layer
 
-class UNet2(nn.Module):
-    def __init__(self, inc=4, outc=3):
-        super(UNet2, self).__init__()
-        self.conv1 = DoubleConv(inc, 64)
-        self.down1 = DownLayer(64, 128)
-        self.down2 = DownLayer(128, 256)
-        self.down3 = DownLayer(256, 512)
-        # self.down4 = DownLayer(512, 1024)
-        # self.up1 = UpLayer(1024, 512)
-        self.up2 = UpLayer(512, 256)
-        self.up3 = UpLayer(256, 128)
-        self.up4 = UpLayer(128, 64)
-        self.last_conv = nn.Conv2d(64, outc, 1)
-        self.activation = nn.Sigmoid() # to get output normalized images
+        for param in self.parameters():
+            param.requires_grad = False  # Freeze VGG
 
     def forward(self, x):
-        x1 = self.conv1(x)
+        x = self.features(x)
+        x = self.avgpool(x)
+        x = torch.flatten(x, 1)
+        x = self.fc(x)
+        return x  # [B, 4096]"""
+
+
+class UNet2(nn.Module):
+    def __init__(self, inc=3, outc=3):
+        super(UNet2, self).__init__()
+        # self.vgg = VGGFeatures()
+
+        # ResNet18 for global features (used optionally)
+        resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+        for param in resnet.parameters():
+            param.requires_grad = False
+        self.resnet_feature_extractor = nn.Sequential(*list(resnet.children())[:-1])  # Global AvgPool output
+        self.feature_proj = nn.Linear(512, 32 * 32)  # Map global features to spatial map (reshape to 32x32)
+
+
+        self.conv1 = DoubleConv(inc, 32)
+        self.down1 = DownLayer(32, 64)
+        self.down2 = DownLayer(64, 128)
+        self.down3 = DownLayer(128, 256)
+        # self.down4 = DownLayer(512, 1024)  # bottleneck#
+
+        # New FC to map 4096 -> 1024 (to match UNet bottleneck channels)
+        self.vgg_to_bottleneck = nn.Linear(4096, 1024 * 8 * 8)
+
+        # self.up1 = UpLayer(1024, 512)
+        self.up2 = UpLayer(256, 128)
+        self.up3 = UpLayer(128, 64)
+        self.up4 = UpLayer(64, 32)
+
+        self.last_conv = nn.Conv2d(32, outc, 1)
+        self.activation = nn.Sigmoid()
+
+    def forward(self, cropped_input, full_input):
+        # VGG features
+        # vgg_feat = self.vgg(vgg_input)  # [B, 4096]
+        # vgg_mapped = self.vgg_to_bottleneck(vgg_feat).view(-1, 1024, 8, 8)
+
+        # Extract global features
+        batch_size = full_input.size(0)
+        global_feat = self.resnet_feature_extractor(full_input).squeeze(-1).squeeze(-1)  # [B, 512]
+        global_feat = self.feature_proj(global_feat).view(batch_size, 1, 32, 32)  # Reshape to [B, 1, 32, 32]
+        global_feat = F.interpolate(global_feat, size=(256, 256), mode='bilinear', align_corners=False)
+
+        # UNet encoding
+        x1 = self.conv1(cropped_input)
         x2 = self.down1(x1)
         x3 = self.down2(x2)
         x4 = self.down3(x3)
         # x5 = self.down4(x4)
-        # x1_up = self.up1(x4, x5)
-        x2_up = self.up2(x3, x4)
-        x3_up = self.up3(x2, x2_up)
-        x4_up = self.up4(x1, x3_up)
-        output = self.last_conv(x4_up)
-        return output
+
+        # Combine VGG features into bottleneck
+        # x_bottleneck = x4 + vgg_mapped  # or torch.cat([...], dim=1) and adjust channels
+
+        x1_up = self.up1(x3, x4)
+        x2_up = self.up2(x2, x1_up)
+        x3_up = self.up3(x1, x2_up)
+        # x4_up = self.up4(x1, x3_up)
+
+        output = self.last_conv(x3_up + global_feat)  # Fuse global features here (simple addition)
+        return self.activation(output)
+
 
 
