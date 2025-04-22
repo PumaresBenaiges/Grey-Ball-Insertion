@@ -20,8 +20,8 @@ def train_model(epochs=100):
     train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
 
     # Dataloaders
-    train_loader = DC.DataLoader(train_dataset, batch_size=16, shuffle=True, num_workers=16, pin_memory=True)
-    val_loader = DC.DataLoader(val_dataset, batch_size=16, shuffle=False, num_workers=16, pin_memory=True)
+    train_loader = DC.DataLoader(train_dataset, batch_size=16, shuffle=True, num_workers=0, pin_memory=True)
+    val_loader = DC.DataLoader(val_dataset, batch_size=16, shuffle=False, num_workers=0, pin_memory=True)
     print(f'Dataloader Created: {train_size} train samples, {val_size} validation samples')
 
     # Create and train model

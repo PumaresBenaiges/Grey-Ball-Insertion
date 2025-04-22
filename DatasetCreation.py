@@ -8,12 +8,17 @@ from matplotlib.image import interpolations_names
 from torch.utils.data import Dataset, DataLoader
 import torchvision.utils as vutils
 
+
+import torch.nn as nn
+import torch.nn.functional as F
+from torchvision import models
+
 IM_SIZE=(2844,4284,3)
 # NEW_SIZE=(2848,4288)
 NEW_SIZE=(256,256)
 
 
-def crop_center(image, ball_data, crop_size=(64, 64)):
+def crop_center(image, ball_data, crop_size=(128, 128)):
     """
     Crops the image with the provided crop_size centered at 'center'.
     If the crop goes out of bounds, the region is padded (or resized afterward).
@@ -52,7 +57,7 @@ def load_image(path):
         image = raw.postprocess()
         height, width, channels = image.shape
         if width < height:
-            image = np.rot90(image)
+            image = np.rot90(image).copy()
     return image
 
 def load_input_scenes(input_paths):
@@ -153,14 +158,13 @@ class SceneDataset(Dataset):
         Each item of dataset is composed by:
         - Input image (scene)
         - Input image cropped (scene)
-        - Mask (ball position)
-        - Output image (shot)
+        - Output image cropped (shot)
         """
         scene_id, shot_id, path = self.output_images_paths[idx]
         ball_data = self.df[self.df['image_name'] == shot_id]
-        input_image_cropped = crop_center(self.input_images[scene_id], ball_data, NEW_SIZE)
+        input_image_cropped = crop_center(self.input_images[scene_id], ball_data)
         output_image = load_image(path)
-        output_image = crop_center(output_image, ball_data, NEW_SIZE)
+        output_image = crop_center(output_image, ball_data)
 
         input_image = cv2.resize(self.input_images[scene_id], (224,224), interpolation=cv2.INTER_AREA)
 
@@ -170,8 +174,13 @@ class SceneDataset(Dataset):
         # Generate mask for ball position
         # mask = create_probability_map(ball_data)
 
-        # Convert to tensor and normalize to [0, 1]
+        # Convert to tensor and normalize
+        # Cropped image: To [0, 1]
+        # Whole image: to mean and std of resnet
         input_image = torch.from_numpy(input_image).permute(2, 0, 1).float() / 255.0
+        mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
+        std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
+        input_image = input_image.sub(mean).div(std)
         input_image_cropped = torch.from_numpy(input_image_cropped).permute(2, 0, 1).float() / 255.0
         output_image = torch.from_numpy(output_image).permute(2, 0, 1).float() / 255.0
         # mask = torch.from_numpy(mask).unsqueeze(0).float()  # (1, H, W)
@@ -187,23 +196,23 @@ if __name__ == '__main__':
     # Create dataset and dataloader
     dataset = SceneDataset(input_images, ball_data, output_paths)
     #dataloader = DataLoader(dataset, batch_size=4, shuffle=True, num_workers=0, pin_memory=True)
-    print(dataset[0])
+    #print(dataset[0])
     # Get one batch as example and check dataset is created correctly
     dataloader = DataLoader(dataset, batch_size=1, shuffle=True, num_workers=0, pin_memory=True)
 
-    for batch_idx, (input_images, masks, output_images) in enumerate(dataloader):
+    for batch_idx, (input_images, input_cropped, output_cropped) in enumerate(dataloader):
         print(f"Batch {batch_idx}")
         print(f"Input images shape: {input_images.shape}")  # (B, 3, H, W)
-        print(f"Output images shape: {output_images.shape}")  # (B, 3, H, W)
-        print(f"Masks shape: {masks.shape}")  # (B, 1, H, W)
+        print(f"Output cropped shape: {output_cropped.shape}")  # (B, 3, H, W)
+        print(f"Input cropped shape: {input_cropped.shape}")  # (B, 1, H, W)
         print(f"Input image range: {input_images.min()} - {input_images.max()}")
-        print(f"Output image range: {output_images.min()} - {output_images.max()}")
-        print(f"Mask range: {masks.min()} - {masks.max()}")
+        print(f"Output cropped range: {output_cropped.min()} - {output_cropped.max()}")
+        print(f"Input cropped range: {input_cropped.min()} - {input_cropped.max()}")
 
         # Save grid of images
         vutils.save_image(input_images, 'input_samples.png', nrow=4, normalize=True)
-        vutils.save_image(masks, 'mask_samples.png', nrow=4, normalize=True)
-        vutils.save_image(output_images, 'output_samples.png', nrow=4, normalize=True)
+        vutils.save_image(input_cropped, 'input_crop_samples.png', nrow=4, normalize=True)
+        vutils.save_image(output_cropped, 'output_samples.png', nrow=4, normalize=True)
 
         if batch_idx == 0:  # check only first batch
             break

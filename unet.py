@@ -3,7 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import models
 
-
 class UNet(nn.Module):
     def __init__(self, input_channels=4, output_channels=3):
         super(UNet, self).__init__()
@@ -146,21 +145,6 @@ class DoubleConv(nn.Module):
         x = self.conv(x)
         return x
 
-class Up(nn.Module):
-    def __init__(self, in_ch, out_ch):
-        super(Up, self).__init__()
-        self.up_scale = nn.ConvTranspose2d(in_ch, out_ch, kernel_size=2, stride=2)
-
-    def forward(self, x1, x2):
-        x2 = self.up_scale(x2)
-
-        diffY = x1.size()[2] - x2.size()[2]
-        diffX = x1.size()[3] - x2.size()[3]
-
-        x2 = F.pad(x2, [diffX // 2, diffX - diffX // 2, diffY // 2, diffY - diffY // 2])
-        x = torch.cat([x2, x1], dim=1)
-        return x
-
 class DownLayer(nn.Module):
     def __init__(self, in_ch, out_ch):
         super(DownLayer, self).__init__()
@@ -172,92 +156,72 @@ class DownLayer(nn.Module):
         return x
 
 class UpLayer(nn.Module):
-    def __init__(self, in_ch, out_ch):
-        super(UpLayer, self).__init__()
-        self.up = Up(in_ch, out_ch)
-        self.conv = DoubleConv(in_ch, out_ch)
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+        self.up = nn.ConvTranspose2d(in_channels, out_channels, kernel_size=2, stride=2)
+        self.conv = DoubleConv(in_channels, out_channels)
 
     def forward(self, x1, x2):
-        a = self.up(x1, x2)
-        x = self.conv(a)
-        return x
-
-"""class VGGFeatures(nn.Module):
-    def __init__(self):
-        super(VGGFeatures, self).__init__()
-        vgg = models.vgg16(weights=models.VGG16_Weights.DEFAULT)
-        self.features = vgg.features
-        self.avgpool = vgg.avgpool
-        self.fc = nn.Sequential(*list(vgg.classifier.children())[:-1])  # Up to fc7 (4096) remove last layer
-
-        for param in self.parameters():
-            param.requires_grad = False  # Freeze VGG
-
-    def forward(self, x):
-        x = self.features(x)
-        x = self.avgpool(x)
-        x = torch.flatten(x, 1)
-        x = self.fc(x)
-        return x  # [B, 4096]"""
-
+        x1 = self.up(x1)
+        diffY = x2.size()[2] - x1.size()[2]
+        diffX = x2.size()[3] - x1.size()[3]
+        x1 = F.pad(x1, [diffX // 2, diffX - diffX // 2,
+                        diffY // 2, diffY - diffY // 2])
+        x = torch.cat([x2, x1], dim=1)
+        return self.conv(x)
 
 class UNet2(nn.Module):
     def __init__(self, inc=3, outc=3):
         super(UNet2, self).__init__()
-        # self.vgg = VGGFeatures()
 
-        # ResNet18 for global features (used optionally)
+        # ResNet18 for global features
         resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
         for param in resnet.parameters():
             param.requires_grad = False
         self.resnet_feature_extractor = nn.Sequential(*list(resnet.children())[:-1])  # Global AvgPool output
-        self.feature_proj = nn.Linear(512, 32 * 32)  # Map global features to spatial map (reshape to 32x32)
+        #self.feature_proj = nn.Linear(512, 32 * 32)  # Map global features to spatial map (reshape to 32x32)
+        self.feature_proj = nn.Linear(512, 256 * 8 * 8)
 
 
         self.conv1 = DoubleConv(inc, 32)
         self.down1 = DownLayer(32, 64)
         self.down2 = DownLayer(64, 128)
         self.down3 = DownLayer(128, 256)
-        # self.down4 = DownLayer(512, 1024)  # bottleneck#
 
-        # New FC to map 4096 -> 1024 (to match UNet bottleneck channels)
-        self.vgg_to_bottleneck = nn.Linear(4096, 1024 * 8 * 8)
+        self.bottleneck = DoubleConv(256+256, 256) # 256 of encoder + 256 resnet output
 
-        # self.up1 = UpLayer(1024, 512)
-        self.up2 = UpLayer(256, 128)
-        self.up3 = UpLayer(128, 64)
-        self.up4 = UpLayer(64, 32)
+        self.up1 = UpLayer(256, 128)
+        self.up2 = UpLayer(128, 64)
+        self.up3 = UpLayer(64, 32)
 
         self.last_conv = nn.Conv2d(32, outc, 1)
         self.activation = nn.Sigmoid()
 
     def forward(self, cropped_input, full_input):
-        # VGG features
-        # vgg_feat = self.vgg(vgg_input)  # [B, 4096]
-        # vgg_mapped = self.vgg_to_bottleneck(vgg_feat).view(-1, 1024, 8, 8)
 
-        # Extract global features
         batch_size = full_input.size(0)
+
+        # === Encoder ===
+        x1 = self.conv1(cropped_input)  # [B, 32, 256, 256]
+        x2 = self.down1(x1)  # [B, 64, 128, 128]
+        x3 = self.down2(x2)  # [B, 128, 64, 64]
+        x4 = self.down3(x3)  # [B, 256, 32, 32]
+
+        # === Global Features ===
         global_feat = self.resnet_feature_extractor(full_input).squeeze(-1).squeeze(-1)  # [B, 512]
-        global_feat = self.feature_proj(global_feat).view(batch_size, 1, 32, 32)  # Reshape to [B, 1, 32, 32]
-        global_feat = F.interpolate(global_feat, size=(256, 256), mode='bilinear', align_corners=False)
+        global_proj = self.feature_proj(global_feat).view(batch_size, 256, 8, 8)  # [B, 256, 8, 8]
+        global_proj_upsampled = F.interpolate(global_proj, size=(16, 16), mode='bilinear', align_corners=False) # [B, 256, 32, 32]
 
-        # UNet encoding
-        x1 = self.conv1(cropped_input)
-        x2 = self.down1(x1)
-        x3 = self.down2(x2)
-        x4 = self.down3(x3)
-        # x5 = self.down4(x4)
+        # === Bottleneck Fusion ===
+        bottleneck_input = torch.cat([x4, global_proj_upsampled], dim=1)  # [B, 512, 32, 32]
+        x_bottleneck = self.bottleneck(bottleneck_input)  # [B, 256, 32, 32]
 
-        # Combine VGG features into bottleneck
-        # x_bottleneck = x4 + vgg_mapped  # or torch.cat([...], dim=1) and adjust channels
+        # === Decoder ===
+        x = self.up1(x_bottleneck, x3)  # [B, 128, 64, 64]
+        x = self.up2(x, x2)  # [B, 64, 128, 128]
+        x = self.up3(x, x1)  # [B, 32, 256, 256]
 
-        x1_up = self.up1(x3, x4)
-        x2_up = self.up2(x2, x1_up)
-        x3_up = self.up3(x1, x2_up)
-        # x4_up = self.up4(x1, x3_up)
-
-        output = self.last_conv(x3_up + global_feat)  # Fuse global features here (simple addition)
+        output = self.last_conv(x)
         return self.activation(output)
 
 
