@@ -210,7 +210,7 @@ class UNet2(nn.Module):
         # === Global Features ===
         global_feat = self.resnet_feature_extractor(full_input).squeeze(-1).squeeze(-1)  # [B, 512]
         global_proj = self.feature_proj(global_feat).view(batch_size, 256, 8, 8)  # [B, 256, 8, 8]
-        global_proj_upsampled = F.interpolate(global_proj, size=(16, 16), mode='bilinear', align_corners=False) # [B, 256, 32, 32]
+        global_proj_upsampled = F.interpolate(global_proj, size=(32, 32), mode='bilinear', align_corners=False) # [B, 256, 32, 32]
 
         # === Bottleneck Fusion ===
         bottleneck_input = torch.cat([x4, global_proj_upsampled], dim=1)  # [B, 512, 32, 32]

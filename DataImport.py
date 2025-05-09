@@ -55,8 +55,9 @@ def download_shots():
                'downtown_smith', 'edu_area', 'foodcourt_mcnz', 'hallway',
                'image_theater', 'owl_statue', 'playground', 'rugs', 'seat_rows',
                'study_area', 'stump', 'subway1', 'subway2', 'theater', 'tree_tunel',
-               'uncle_faith1', 'uncle_faith2', 'under_tree2', 'wall_art',
+               'uncle_fatih1', 'uncle_fatih2', 'under_tree2', 'wall_art',
                'wall_hallway', 'wall_lab']
+
     for folder in folders:
         # Folder url link
         base_url = 'https://www2.cs.sfu.ca/~colour/data2/DRONE-Dataset/scenes_shots/' + folder + '/'

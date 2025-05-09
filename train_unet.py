@@ -10,6 +10,7 @@ from tqdm import tqdm
 
 
 def train_model(epochs=100):
+    
     # Create dataset, train/test split and dataloaders
     input_paths, ball_data, output_paths = DC.get_image_paths()
     input_images = DC.load_input_scenes(input_paths)

@@ -7,6 +7,8 @@ import cv2
 from matplotlib.image import interpolations_names
 from torch.utils.data import Dataset, DataLoader
 import torchvision.utils as vutils
+from PIL import Image
+from torchvision.utils import save_image
 
 
 import torch.nn as nn
@@ -16,9 +18,60 @@ from torchvision import models
 IM_SIZE=(2844,4284,3)
 # NEW_SIZE=(2848,4288)
 NEW_SIZE=(256,256)
+import cv2
+import numpy as np
+
+def crop_center(image, ball_data, crop_size=(256, 256)):
+    """
+    Crops the image with the provided crop_size centered at the ball's center.
+    Applies a circular mask around the ball, everything else is set to black.
+    """
+    crop_h, crop_w = crop_size
+    cx = int(ball_data['circle_x'].iloc[0])
+    cy = int(ball_data['circle_y'].iloc[0])
+    radius = int(ball_data['circle_radiuos'].iloc[0]) + 50
+    
+    # Compute top-left corner
+    start_x = cx - crop_w // 2
+    start_y = cy - crop_h // 2
+
+    # Get full image dimensions
+    img_h, img_w = image.shape[:2]
+
+    # Compute end coordinates
+    end_x = start_x + crop_w
+    end_y = start_y + crop_h
+
+    # Initialize a black image (the same size as crop)
+    cropped = np.zeros((crop_h, crop_w, 3), dtype=np.uint8)
+
+    # Compute valid crop region in the source image
+    src_x1 = max(start_x, 0)
+    src_y1 = max(start_y, 0)
+    src_x2 = min(end_x, img_w)
+    src_y2 = min(end_y, img_h)
+
+    # Compute corresponding destination coordinates
+    dst_x1 = src_x1 - start_x
+    dst_y1 = src_y1 - start_y
+    dst_x2 = dst_x1 + (src_x2 - src_x1)
+    dst_y2 = dst_y1 + (src_y2 - src_y1)
+
+    # Copy the valid region from the source image
+    cropped[dst_y1:dst_y2, dst_x1:dst_x2] = image[src_y1:src_y2, src_x1:src_x2]
+
+    # Create circular mask centered relative to the crop
+    mask = np.zeros((crop_h, crop_w), dtype=np.uint8)
+    circle_center = (cx - start_x, cy - start_y)
+    cv2.circle(mask, circle_center, radius, 255, -1)
+
+    # Apply mask to cropped image
+    cropped = cv2.bitwise_and(cropped, cropped, mask=mask)
+
+    return cropped
 
 
-def crop_center(image, ball_data, crop_size=(128, 128)):
+def crop_center2(image, ball_data, crop_size=(256, 256)):
     """
     Crops the image with the provided crop_size centered at 'center'.
     If the crop goes out of bounds, the region is padded (or resized afterward).
@@ -41,6 +94,26 @@ def crop_center(image, ball_data, crop_size=(128, 128)):
     if (cropped.shape[0] != crop_h) or (cropped.shape[1] != crop_w):
         cropped = cv2.resize(cropped, (crop_w, crop_h), interpolation=cv2.INTER_AREA)
     return cropped
+
+
+def load_image_jpg(path):
+    """
+    Args:
+        path: path of one JPG image to load.
+
+    Reads the JPG image from the path, preprocesses it and resizes if needed.
+
+    Returns:
+        Preprocessed and possibly rotated image as a NumPy array.
+    """
+    image = Image.open(path).convert('RGB')  # Ensure it's in RGB mode
+    image_np = np.array(image)
+    
+    height, width, _ = image_np.shape
+    if width < height:
+        image_np = np.rot90(image_np).copy()
+
+    return image_np
 
 def load_image(path):
     """
@@ -162,17 +235,14 @@ class SceneDataset(Dataset):
         """
         scene_id, shot_id, path = self.output_images_paths[idx]
         ball_data = self.df[self.df['image_name'] == shot_id]
-        input_image_cropped = crop_center(self.input_images[scene_id], ball_data)
+
+        input_image = self.input_images[scene_id]
+        input_image = cv2.resize(input_image, (224,224), interpolation=cv2.INTER_AREA)
         output_image = load_image(path)
         output_image = crop_center(output_image, ball_data)
-
-        input_image = cv2.resize(self.input_images[scene_id], (224,224), interpolation=cv2.INTER_AREA)
-
-        if ball_data.empty:
-            print('No data for image'+ scene_id+shot_id)
-
-        # Generate mask for ball position
-        # mask = create_probability_map(ball_data)
+        input_image_c = load_image_jpg('scenes_aligned/' + scene_id + '/' + shot_id+'.jpg')
+        input_image_cropped = crop_center(input_image_c, ball_data)
+        
 
         # Convert to tensor and normalize
         # Cropped image: To [0, 1]
@@ -183,7 +253,7 @@ class SceneDataset(Dataset):
         input_image = input_image.sub(mean).div(std)
         input_image_cropped = torch.from_numpy(input_image_cropped).permute(2, 0, 1).float() / 255.0
         output_image = torch.from_numpy(output_image).permute(2, 0, 1).float() / 255.0
-        # mask = torch.from_numpy(mask).unsqueeze(0).float()  # (1, H, W)
+       
 
         return input_image, input_image_cropped, output_image
 
@@ -198,7 +268,7 @@ if __name__ == '__main__':
     #dataloader = DataLoader(dataset, batch_size=4, shuffle=True, num_workers=0, pin_memory=True)
     #print(dataset[0])
     # Get one batch as example and check dataset is created correctly
-    dataloader = DataLoader(dataset, batch_size=1, shuffle=True, num_workers=0, pin_memory=True)
+    dataloader = DataLoader(dataset, batch_size=4, shuffle=True, num_workers=0, pin_memory=True)
 
     for batch_idx, (input_images, input_cropped, output_cropped) in enumerate(dataloader):
         print(f"Batch {batch_idx}")
@@ -216,7 +286,6 @@ if __name__ == '__main__':
 
         if batch_idx == 0:  # check only first batch
             break
-
 
 
 
