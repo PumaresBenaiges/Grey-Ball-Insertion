@@ -21,6 +21,19 @@ NEW_SIZE=(256,256)
 import cv2
 import numpy as np
 
+from align_scenes import apply_homography_transformation
+
+def read_homography_from_csv(reader, scene, scene_id):
+    for row in reader:
+        # Check if the row matches the desired scene and scene_id
+        if row[0] == scene and row[1] == scene_id:
+            # Extract the homography values (skip the first two columns: Scene, Scene ID)
+            H_values = list(map(float, row[2:]))
+            # Reshape the flattened values into a 3x3 matrix
+            H = np.array(H_values).reshape(3, 3)
+            return H
+    return None  # Return None if no matching row is found
+
 def crop_center(image, ball_data, crop_size=(256, 256)):
     """
     Crops the image with the provided crop_size centered at the ball's center.
@@ -148,6 +161,14 @@ def load_input_scenes(input_paths):
         input_images[scene_id] = input_image
     return input_images
 
+def load_ball_transformation_data(path):
+    """
+    Returns:
+        Dataframe with the ball transformation data for one shot.
+    """
+    df = pd.read_csv(path)
+    return df
+
 def load_ball_position_data(path):
     """
     Returns:
@@ -218,10 +239,11 @@ class SceneDataset(Dataset):
     - df: dataframe with the ball data for all shots
     - output_images_paths: contains list of scene_id, shot_id and path of the image (shot)
     """
-    def __init__(self, input_images, df, output_images_paths):
+    def __init__(self, input_images, df, output_images_paths, ball_transformation_data):
         self.input_images = input_images
         self.df = df
         self.output_images_paths = output_images_paths
+        self.ball_transformation_data = ball_transformation_data
 
     def __len__(self):
         return len(self.output_images_paths)
@@ -235,13 +257,21 @@ class SceneDataset(Dataset):
         """
         scene_id, shot_id, path = self.output_images_paths[idx]
         ball_data = self.df[self.df['image_name'] == shot_id]
+        shot_id_transformation = shot_id + '.NEF'
+        ball_scene_t = self.ball_transformation_data[self.ball_transformation_data['Scene'] == scene_id]
+        ball_transformation = ball_scene_t[ball_scene_t['Scene ID'] == shot_id_transformation]
+        H_values = ball_transformation.iloc[0, 2:].values.tolist()
+        H = np.array(H_values).reshape(3, 3)
 
         input_image = self.input_images[scene_id]
+        input_image = apply_homography_transformation(input_image, H)
+        input_image_cropped = crop_center(input_image, ball_data)
         input_image = cv2.resize(input_image, (224,224), interpolation=cv2.INTER_AREA)
+
         output_image = load_image(path)
         output_image = crop_center(output_image, ball_data)
-        input_image_c = load_image_jpg('scenes_aligned/' + scene_id + '/' + shot_id+'.jpg')
-        input_image_cropped = crop_center(input_image_c, ball_data)
+        #input_image_c = load_image_jpg('scenes_aligned/' + scene_id + '/' + shot_id+'.jpg')
+        #input_image_cropped = crop_center(input_image_c, ball_data)
         
 
         # Convert to tensor and normalize
@@ -258,13 +288,15 @@ class SceneDataset(Dataset):
         return input_image, input_image_cropped, output_image
 
 if __name__ == '__main__':
+    csv_file_path = 'homography_transformation.csv'
     input_paths, ball_data, output_paths = get_image_paths()
+    ball_transformation_data = load_ball_transformation_data(csv_file_path)
     input_images = load_input_scenes(input_paths)
     print('Input images loaded.')
     # ball_data.to_csv('ball_data.csv')
 
     # Create dataset and dataloader
-    dataset = SceneDataset(input_images, ball_data, output_paths)
+    dataset = SceneDataset(input_images, ball_data, output_paths, ball_transformation_data)
     #dataloader = DataLoader(dataset, batch_size=4, shuffle=True, num_workers=0, pin_memory=True)
     #print(dataset[0])
     # Get one batch as example and check dataset is created correctly
