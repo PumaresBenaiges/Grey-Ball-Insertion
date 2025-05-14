@@ -4,24 +4,24 @@ import rawpy
 import os
 import csv
 
-# Load the scene image (reference image)
+# Load the scene image 
 def load_scene(scene):
     scene_path = os.path.join("scenes", scene + ".NEF")
     with rawpy.imread(scene_path) as raw:
         rgb = raw.postprocess()
-    scene_img = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+    scene_img = cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB)
     height, width = scene_img.shape
     if width < height:
         scene_img = np.rot90(scene_img)
     return scene_img
-
-# Load the scene shot image (to be transformed)
-def load_scene_shot(scene, scene_id):
-    scene_shot_path = os.path.join("scenes_shots", scene, scene_id)
+####### 2ebvgwgFDFD
+# Load the scene shot image
+def load_scene_shot(scene_id, shot_id):
+    scene_shot_path = os.path.join("scenes_shots", scene_id, shot_id)
     with rawpy.imread(scene_shot_path) as raw:
         rgb = raw.postprocess()
     scene_shot_img = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
-    height, width= scene_shot_img.shape
+    height, width, channels = scene_shot_img.shape
     if width < height:
         scene_shot_img = np.rot90(scene_shot_img)
     return scene_shot_img
@@ -39,7 +39,7 @@ def apply_homography_transformation(scene_img, H):
         return transformed_img
     except:
         print('not transformed')
-        return None
+        return scene_img
 
 # Function to read the homography matrix from the CSV file
 def read_homography_from_csv(file_path, scene, scene_id):
@@ -64,7 +64,6 @@ def align_shots_with_scenes():
             'study_area', 'stump', 'subway1', 'subway2', 'theater', 'tree_tunel',
             'uncle_fatih1', 'uncle_fatih2', 'under_tree2', 'wall_art',
             'wall_hallway', 'wall_lab']
-    folders = ['uncle_fatih1', 'uncle_fatih2']  # Example folder for testing
     
     # Path to the CSV file containing homography matrices
     csv_file_path = 'homography_transformation.csv'
