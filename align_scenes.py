@@ -10,18 +10,18 @@ def load_scene(scene):
     with rawpy.imread(scene_path) as raw:
         rgb = raw.postprocess()
     scene_img = cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB)
-    height, width = scene_img.shape
+    height, width, _ = scene_img.shape
     if width < height:
         scene_img = np.rot90(scene_img)
     return scene_img
-####### 2ebvgwgFDFD
+
 # Load the scene shot image
 def load_scene_shot(scene_id, shot_id):
     scene_shot_path = os.path.join("scenes_shots", scene_id, shot_id)
     with rawpy.imread(scene_shot_path) as raw:
         rgb = raw.postprocess()
     scene_shot_img = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
-    height, width, channels = scene_shot_img.shape
+    height, width = scene_shot_img.shape
     if width < height:
         scene_shot_img = np.rot90(scene_shot_img)
     return scene_shot_img
@@ -31,7 +31,7 @@ def load_scene_shot(scene_id, shot_id):
 def apply_homography_transformation(scene_img, H):
     try:
         # Get the dimensions of the scene shot image
-        rows, cols = scene_img.shape
+        rows, cols, channels = scene_img.shape
 
         # Use the homography matrix to transform the scene shot image into the scene
         transformed_img = cv2.warpPerspective(scene_img, H, (cols, rows))

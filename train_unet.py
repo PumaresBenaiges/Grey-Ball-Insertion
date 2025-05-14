@@ -7,14 +7,36 @@ import torch.optim as optim
 from torch.utils.data import random_split
 from torchvision.utils import save_image
 from tqdm import tqdm
-
+import pandas as pd
+import utils
+import cv2
 
 def train_model(epochs=100):
+    # Load dataframes
+    ball_data = pd.read_csv('ball_data.csv')
+    transformations_data = pd.read_csv('homography_transformation.csv')
+
+    input_paths, output_paths = utils.get_image_paths(ball_data)
+    input_images = utils.load_input_scenes(input_paths)
+    print('Input images loaded.')
+
+    # For each scene, extract the features using the ResNet18 model
+    resnet = utils.load_resnet18()
+    feature_proj = nn.Linear(512, 256 * 8 * 8)
+    features = {}
+    mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
+    std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
     
-    # Create dataset, train/test split and dataloaders
-    input_paths, ball_data, output_paths = DC.get_image_paths()
-    input_images = DC.load_input_scenes(input_paths)
-    dataset = DC.SceneDataset(input_images, ball_data, output_paths)
+    for scene_id, image in input_images.items():
+        image = cv2.resize(image, (224,224), interpolation=cv2.INTER_AREA)
+        image = torch.from_numpy(image).permute(2, 0, 1).float() / 255.0
+        image = image.sub(mean).div(std)
+        feat = utils.extract_features_from_scene(image, resnet, feature_proj)
+        features[scene_id]= feat
+    print('Input images features extracted.')
+    
+
+    dataset = DC.SceneDataset(features, input_images, ball_data, output_paths, transformations_data)
     total_size = len(dataset)
     val_size = int(0.2 * total_size)
     train_size = total_size - val_size
@@ -26,7 +48,7 @@ def train_model(epochs=100):
     print(f'Dataloader Created: {train_size} train samples, {val_size} validation samples')
 
     # Create and train model
-    model = unet.UNet2()
+    model = unet.UNet()
     torch.cuda.empty_cache()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
@@ -34,6 +56,7 @@ def train_model(epochs=100):
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
 
     start_time = time.time()
+    print("Starting training...")
     for epoch in range(epochs):
         print(f"Epoch {epoch + 1}/{epochs}")
         train_loss = 0.0
@@ -41,7 +64,8 @@ def train_model(epochs=100):
         for idx, (input_image, input_image_cropped, target_image) in enumerate(tqdm(train_loader, desc=f"Training Epoch {epoch+1}")):
             input_image, input_image_cropped, target_image = input_image.to(device), input_image_cropped.to(device), target_image.to(device)
             # input_tensor = torch.cat([input_image, mask], dim=1)
-
+            mida = input_image.size()
+            print(mida)
             # Forward pass
             output = model(input_image_cropped, input_image)
             loss = criterion(output, target_image)
@@ -63,7 +87,7 @@ def train_model(epochs=100):
                     val_loss += loss.item()"""
 
         # Example inside training loop
-        if epoch in (1, 25, 50, 75, epochs-1):
+        if epoch in (0, 1, 2, 3, 25, 50, 75, epochs-1):
             save_image(torch.cat((output[:4], target_image[:4]), dim=0), f"comparison{epoch}.jpg", nrow=4, normalize=True)
         print(f"Train Loss: {train_loss / len(train_loader)}, Val Loss: {val_loss / len(val_loader)}, Time: {time.time()-start_time}s")
 
