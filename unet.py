@@ -98,6 +98,75 @@ class UNet(nn.Module):
 
         output = self.last_conv(x)
         return self.activation(output)
+    
+
+
+class UNetMobileNetV3(nn.Module):
+    def __init__(self, inc=3, outc=3):
+        super(UNetMobileNetV3, self).__init__()
+
+        # # ResNet18 for global features
+        # resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+        # for param in resnet.parameters():
+        #     param.requires_grad = False
+        # self.resnet_feature_extractor = nn.Sequential(*list(resnet.children())[:-1])  # Global AvgPool output
+        # #self.feature_proj = nn.Linear(512, 32 * 32)  # Map global features to spatial map (reshape to 32x32)
+        # self.feature_proj = nn.Linear(512, 256 * 8 * 8)
+        
+        # === MobileNetV3 for global features ===
+        mobilenet = models.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.DEFAULT)
+        for param in mobilenet.parameters():
+            param.requires_grad = False
+        self.mobilenet_feature_extractor = mobilenet.features  # Output: [B, 960, 7, 7]
+        self.global_pool = nn.AdaptiveAvgPool2d((1, 1))  # Make output [B, 960, 1, 1]
+        self.feature_proj = nn.Linear(960, 256 * 8 * 8)  # Project to spatial features
+
+        self.conv1 = DoubleConv(inc, 32)
+        self.down1 = DownLayer(32, 64)
+        self.down2 = DownLayer(64, 128)
+        self.down3 = DownLayer(128, 256)
+
+        self.bottleneck = DoubleConv(256+256, 256) # 256 of encoder + 256 resnet output
+
+        self.up1 = UpLayer(256, 128)
+        self.up2 = UpLayer(128, 64)
+        self.up3 = UpLayer(64, 32)
+
+        self.last_conv = nn.Conv2d(32, outc, 1)
+        self.activation = nn.Sigmoid()
+
+    def forward(self, cropped_input, full_input):
+
+        batch_size = full_input.size(0)
+
+        # === Encoder ===
+        x1 = self.conv1(cropped_input)  # [B, 32, 256, 256]
+        x2 = self.down1(x1)  # [B, 64, 128, 128]
+        x3 = self.down2(x2)  # [B, 128, 64, 64]
+        x4 = self.down3(x3)  # [B, 256, 32, 32]
+
+        # # === Global Features ===
+        # global_feat = self.resnet_feature_extractor(full_input).squeeze(-1).squeeze(-1)  # [B, 512]
+        # global_proj = self.feature_proj(global_feat).view(batch_size, 256, 8, 8)  # [B, 256, 8, 8]
+        # global_proj_upsampled = F.interpolate(global_proj, size=(32, 32), mode='bilinear', align_corners=False) # [B, 256, 32, 32]
+
+         # === Global Features ===
+        global_feat = self.mobilenet_feature_extractor(full_input)  # [B, 960, 7, 7]
+        global_feat = self.global_pool(global_feat).squeeze(-1).squeeze(-1)  # [B, 960]
+        global_proj = self.feature_proj(global_feat).view(batch_size, 256, 8, 8)  # [B, 256, 8, 8]
+        global_proj_upsampled = F.interpolate(global_proj, size=(32, 32), mode='bilinear', align_corners=False)
+
+        # === Bottleneck Fusion ===
+        bottleneck_input = torch.cat([x4, global_proj_upsampled], dim=1)  # [B, 512, 32, 32]
+        x_bottleneck = self.bottleneck(bottleneck_input)  # [B, 256, 32, 32]
+
+        # === Decoder ===
+        x = self.up1(x_bottleneck, x3)  # [B, 128, 64, 64]
+        x = self.up2(x, x2)  # [B, 64, 128, 128]
+        x = self.up3(x, x1)  # [B, 32, 256, 256]
+
+        output = self.last_conv(x)
+        return self.activation(output)
 
 
 

@@ -148,12 +148,10 @@ def load_image(path):
 def load_input_scenes(input_paths):
     """
     Args:
-        List of paths of the input scenes images.
+        Dictionary of paths of the input scenes images.
     Returns:
         Dictionary with scene_id and loaded image.
     """
-    # Load and process input image
-    # Changed. How does it saves path?
     input_images = {}
     for scene_id, input_path in input_paths.items():
         input_image = load_image(input_path)
@@ -263,6 +261,10 @@ def extract_features_from_scene(image_tensor, resnet_feature_extractor, feature_
     return upsampled.squeeze(0)  # [1, 256, 32, 32]
 
 def load_resnet18():
+    """ 
+    Loads a pretrained ResNet18 model and removes the classification head.
+    Returns a feature extractor that outputs a global [B, 512] feature vector.
+    """
     # Load ResNet18 for global features
     resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
     resnet.eval()
@@ -271,7 +273,27 @@ def load_resnet18():
 
     # Remove the last layer
     resnet_feature_extractor = nn.Sequential(*list(resnet.children())[:-1])  # Global AvgPool output
+    feature_proj = nn.Linear(512, 256 * 8 * 8)
 
-    return resnet_feature_extractor
+    return resnet_feature_extractor, feature_proj
+
+def load_mobilenet_v3():
+    """
+    Loads a pretrained MobileNetV3-Large model and removes the classification head.
+    Returns a feature extractor that outputs a global [B, 960] feature vector.
+    """
+    mobilenet = models.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.DEFAULT)
+    mobilenet.eval()
+    for param in mobilenet.parameters():
+        param.requires_grad = False
+
+    # Extract features before the classifier
+    mobilenet_feature_extractor = nn.Sequential(
+        mobilenet.features,                   # [B, 960, H/32, W/32]
+        nn.AdaptiveAvgPool2d((1, 1)),         # Global pooling -> [B, 960, 1, 1]
+        nn.Flatten(1)                         # Flatten to [B, 960]
+    )
+    feature_proj = nn.Linear(960, 256 * 8 * 8)
+    return mobilenet_feature_extractor, feature_proj
 
 

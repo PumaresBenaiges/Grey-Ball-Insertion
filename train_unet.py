@@ -1,4 +1,5 @@
 import DatasetCreation as DC
+import utils
 import time
 import unet
 import torch
@@ -8,21 +9,18 @@ from torch.utils.data import random_split
 from torchvision.utils import save_image
 from tqdm import tqdm
 import pandas as pd
-import utils
 import cv2
 
 def train_model(epochs=100):
-    # Load dataframes
+    # Load dataframes and images
     ball_data = pd.read_csv('ball_data.csv')
     transformations_data = pd.read_csv('homography_transformation.csv')
-
     input_paths, output_paths = utils.get_image_paths(ball_data)
     input_images = utils.load_input_scenes(input_paths)
-    print('Input images loaded.')
+    print('Data and images loaded.')
 
     # For each scene, extract the features using the ResNet18 model
-    resnet = utils.load_resnet18()
-    feature_proj = nn.Linear(512, 256 * 8 * 8)
+    resnet, feature_proj = utils.load_resnet18()
     features = {}
     mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
     std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
@@ -36,7 +34,7 @@ def train_model(epochs=100):
     print('Input images features extracted.')
     
 
-    dataset = DC.SceneDataset(features, input_images, ball_data, output_paths, transformations_data)
+    dataset = DC.SceneDataset(input_images, ball_data, output_paths, transformations_data, features, 'unet')
     total_size = len(dataset)
     val_size = int(0.2 * total_size)
     train_size = total_size - val_size

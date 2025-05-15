@@ -1,4 +1,3 @@
-
 import os
 import rawpy
 import numpy as np
@@ -10,8 +9,6 @@ from torch.utils.data import Dataset, DataLoader
 import torchvision.utils as vutils
 from PIL import Image
 from torchvision.utils import save_image
-
-
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import models
@@ -21,7 +18,6 @@ from align_scenes import apply_homography_transformation
 import utils
 
 IM_SIZE=(2844,4284,3)
-# NEW_SIZE=(2848,4288)
 NEW_SIZE=(256,256)
 
 # PyTorch Dataset Class
@@ -31,12 +27,13 @@ class SceneDataset(Dataset):
     - df: dataframe with the ball data for all shots
     - output_images_paths: contains list of scene_id, shot_id and path of the image (shot)
     """
-    def __init__(self, features, input_images, df, output_images_paths, transformation_data):
+    def __init__(self, input_images, ball_df, output_images_paths, transformations_df, features=None, model_name='unet_mobilenet'):
         self.features = features
         self.input_images = input_images
-        self.df = df
+        self.df = ball_df
         self.output_images_paths = output_images_paths
-        self.transformation_data = transformation_data
+        self.transformation_data = transformations_df
+        self.model_name = model_name
 
     def __len__(self):
         return len(self.output_images_paths)
@@ -56,6 +53,10 @@ class SceneDataset(Dataset):
         H_values = ball_transformation.iloc[0, 2:].values.tolist()
         H = np.array(H_values).reshape(3, 3)
 
+        # Load already transformed scenes
+        #input_image_c = load_image_jpg('scenes_aligned/' + scene_id + '/' + shot_id+'.jpg')
+        #input_image_cropped = crop_center(input_image_c, ball_data)
+
         # Load, transform and crop scene (input_image)
         input_image = self.input_images[scene_id]
         input_image = apply_homography_transformation(input_image, H)
@@ -69,20 +70,18 @@ class SceneDataset(Dataset):
         input_image_cropped = torch.from_numpy(input_image_cropped).permute(2, 0, 1).float() / 255.0
         output_image = torch.from_numpy(output_image).permute(2, 0, 1).float() / 255.0
 
-        # Load already transformed scenes
-        #input_image_c = load_image_jpg('scenes_aligned/' + scene_id + '/' + shot_id+'.jpg')
-        #input_image_cropped = crop_center(input_image_c, ball_data)
+        if self.model_name == 'unet':
+            # we use the extracted features
+            input = self.features[scene_id]
+        else:
+            # Resize, convert to tensor and normalize to mean and std of resnet
+            input_image = cv2.resize(input_image, (224,224), interpolation=cv2.INTER_AREA)
+            input_image = torch.from_numpy(input_image).permute(2, 0, 1).float() / 255.0
+            mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
+            std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
+            input = input_image.sub(mean).div(std)
 
-        # Resize, convert to tensor and normalize to mean and std of resnet
-        # input_image = cv2.resize(input_image, (224,224), interpolation=cv2.INTER_AREA)
-        # input_image = torch.from_numpy(input_image).permute(2, 0, 1).float() / 255.0
-        # mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
-        # std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
-        # input_image = input_image.sub(mean).div(std)
-       
-        feat = self.features[scene_id]
-        mida2 = feat.size()
-        return feat, input_image_cropped, output_image
+        return input, input_image_cropped, output_image
 
 if __name__ == '__main__':
     # Load dataframes
@@ -94,8 +93,7 @@ if __name__ == '__main__':
     print('Input images loaded.')
 
     # For each scene, extract the features using the ResNet18 model
-    resnet = utils.load_resnet18()
-    feature_proj = nn.Linear(512, 256 * 8 * 8)
+    resnet, feature_proj = utils.load_resnet18()
     features = {}
     mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
     std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
@@ -109,7 +107,7 @@ if __name__ == '__main__':
     print('Input images features extracted.')
 
     # Create dataset and dataloader
-    dataset = SceneDataset(features, input_images, ball_data, output_paths, transformations_data)
+    dataset = SceneDataset(input_images, ball_data, output_paths, transformations_data, features, 'unet')
     #dataloader = DataLoader(dataset, batch_size=4, shuffle=True, num_workers=0, pin_memory=True)
     #print(dataset[0])
     # Get one batch as example and check dataset is created correctly
