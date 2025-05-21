@@ -49,15 +49,6 @@ class UNet(nn.Module):
     def __init__(self, inc=3, outc=3):
         super(UNet, self).__init__()
 
-        # # ResNet18 for global features
-        # resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
-        # for param in resnet.parameters():
-        #     param.requires_grad = False
-        # self.resnet_feature_extractor = nn.Sequential(*list(resnet.children())[:-1])  # Global AvgPool output
-        # #self.feature_proj = nn.Linear(512, 32 * 32)  # Map global features to spatial map (reshape to 32x32)
-        # self.feature_proj = nn.Linear(512, 256 * 8 * 8)
-
-
         self.conv1 = DoubleConv(inc, 32)
         self.down1 = DownLayer(32, 64)
         self.down2 = DownLayer(64, 128)
@@ -81,11 +72,6 @@ class UNet(nn.Module):
         x2 = self.down1(x1)  # [B, 64, 128, 128]
         x3 = self.down2(x2)  # [B, 128, 64, 64]
         x4 = self.down3(x3)  # [B, 256, 32, 32]
-
-        # # === Global Features ===
-        # global_feat = self.resnet_feature_extractor(full_input).squeeze(-1).squeeze(-1)  # [B, 512]
-        # global_proj = self.feature_proj(global_feat).view(batch_size, 256, 8, 8)  # [B, 256, 8, 8]
-        # global_proj_upsampled = F.interpolate(global_proj, size=(32, 32), mode='bilinear', align_corners=False) # [B, 256, 32, 32]
 
         # === Bottleneck Fusion ===
         bottleneck_input = torch.cat([x4, full_input], dim=1)  # [B, 512, 32, 32]
@@ -117,6 +103,12 @@ class UNetMobileNetV3(nn.Module):
         mobilenet = models.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.DEFAULT)
         for param in mobilenet.parameters():
             param.requires_grad = False
+        
+        # Unfreeze the last N layers (e.g., last 3 blocks)
+        num_layers_to_unfreeze = 3
+        for layer in list(mobilenet.features.children())[-num_layers_to_unfreeze:]:
+            for param in layer.parameters():
+                param.requires_grad = True
         self.mobilenet_feature_extractor = mobilenet.features  # Output: [B, 960, 7, 7]
         self.global_pool = nn.AdaptiveAvgPool2d((1, 1))  # Make output [B, 960, 1, 1]
         self.feature_proj = nn.Linear(960, 256 * 8 * 8)  # Project to spatial features

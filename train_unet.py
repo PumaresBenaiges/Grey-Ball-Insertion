@@ -59,13 +59,18 @@ def train_model(epochs=100):
         print(f"Epoch {epoch + 1}/{epochs}")
         train_loss = 0.0
         val_loss = 0.0
-        for idx, (input_image, input_image_cropped, target_image) in enumerate(tqdm(train_loader, desc=f"Training Epoch {epoch+1}")):
-            input_image, input_image_cropped, target_image = input_image.to(device), input_image_cropped.to(device), target_image.to(device)
-            # input_tensor = torch.cat([input_image, mask], dim=1)
-            mida = input_image.size()
-            print(mida)
+        for idx, (input_image, input_image_cropped, target_image, mask) in enumerate(tqdm(train_loader, desc=f"Training Epoch {epoch+1}")):
+            input_image, input_image_cropped, target_image, mask = input_image.to(device), input_image_cropped.to(device), target_image.to(device), mask.to(device)
+                        
+            mask = mask.unsqueeze(1)             # [B, 1, H, W]
+            mask = mask.expand(-1, 3, -1, -1)
+            
             # Forward pass
             output = model(input_image_cropped, input_image)
+            #save_image(torch.cat((output[:4], target_image[:4]), dim=0), f"h{epoch}.jpg", nrow=4, normalize=True)
+            #save_image(target_image[:4], f"h1{epoch}.jpg", nrow=4, normalize=True)
+            output = output * mask  # Apply mask to output
+    
             loss = criterion(output, target_image)
 
             # Backpropagation
@@ -87,6 +92,7 @@ def train_model(epochs=100):
         # Example inside training loop
         if epoch in (0, 1, 2, 3, 25, 50, 75, epochs-1):
             save_image(torch.cat((output[:4], target_image[:4]), dim=0), f"comparison{epoch}.jpg", nrow=4, normalize=True)
+            save_image(target_image[:4], f"gt{epoch}.jpg", nrow=4, normalize=True)
         print(f"Train Loss: {train_loss / len(train_loader)}, Val Loss: {val_loss / len(val_loader)}, Time: {time.time()-start_time}s")
 
     total_time = time.time() - start_time

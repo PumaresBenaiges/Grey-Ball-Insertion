@@ -41,7 +41,7 @@ def crop_center(image, ball_data, crop_size=(256, 256)):
     crop_h, crop_w = crop_size
     cx = int(ball_data['circle_x'].iloc[0])
     cy = int(ball_data['circle_y'].iloc[0])
-    radius = int(ball_data['circle_radiuos'].iloc[0]) + 50
+    radius = int(ball_data['circle_radiuos'].iloc[0]) + 20
     
     # Compute top-left corner
     start_x = cx - crop_w // 2
@@ -80,7 +80,7 @@ def crop_center(image, ball_data, crop_size=(256, 256)):
     # Apply mask to cropped image
     cropped = cv2.bitwise_and(cropped, cropped, mask=mask)
 
-    return cropped
+    return cropped, mask
 
 
 def crop_center2(image, ball_data, crop_size=(256, 256)):
@@ -182,11 +182,11 @@ def create_probability_map(df, binary=True):
     """
     x = df['circle_x'].values[0]
     y = df['circle_y'].values[0]
-    radius = df['circle_radiuos'].values[0]
-    xx, yy = np.meshgrid(np.arange(IM_SIZE[1]), np.arange(IM_SIZE[0]))
+    radius = df['circle_radiuos'].values[0] + 50
+    xx, yy = np.meshgrid(np.arange(256), np.arange(256))
     dist = np.sqrt((xx-x) ** 2 + (yy-y) ** 2)
 
-    if binary: # Binary mask: 1 inside circle, o outside
+    if binary: # Binary mask: 1 inside circle, 0 outside
         mask = (dist <= radius).astype(np.float32)
 
     else: # Gaussian probability map

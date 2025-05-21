@@ -60,11 +60,11 @@ class SceneDataset(Dataset):
         # Load, transform and crop scene (input_image)
         input_image = self.input_images[scene_id]
         input_image = apply_homography_transformation(input_image, H)
-        input_image_cropped = utils.crop_center(input_image, ball_data)
-        
+        input_image_cropped, mask = utils.crop_center(input_image, ball_data)
+
         # Load and crop shot (output_image)
         output_image = utils.load_image(path)
-        output_image = utils.crop_center(output_image, ball_data)
+        output_image, _ = utils.crop_center(output_image, ball_data)
 
         # Normalize to [0,1]
         input_image_cropped = torch.from_numpy(input_image_cropped).permute(2, 0, 1).float() / 255.0
@@ -81,7 +81,7 @@ class SceneDataset(Dataset):
             std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
             input = input_image.sub(mean).div(std)
 
-        return input, input_image_cropped, output_image
+        return input, input_image_cropped, output_image, mask
 
 if __name__ == '__main__':
     # Load dataframes
@@ -92,8 +92,8 @@ if __name__ == '__main__':
     input_images = utils.load_input_scenes(input_paths)
     print('Input images loaded.')
 
-    # For each scene, extract the features using the ResNet18 model
-    resnet, feature_proj = utils.load_resnet18()
+    # For each scene, extract the features using the ResNet18 or MobileNetV3 model
+    resnet, feature_proj = utils.load_resnet18() # or load_mobilenetv3()
     features = {}
     mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
     std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
