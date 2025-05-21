@@ -24,8 +24,11 @@ NEW_SIZE=(256,256)
 class SceneDataset(Dataset):
     """
     - input_images: 30 images of scenes
-    - df: dataframe with the ball data for all shots
+    - ball_df: dataframe with the ball data for all shots
     - output_images_paths: contains list of scene_id, shot_id and path of the image (shot)
+    - transformations_df: dataframe with the homography transformation for each shot
+    - features: extracted features from the scene images (only if you want to train unet alone)
+    - model_name: to decide if you want to train only unet or unet+mobilenet (unet or unet_mobilenet)
     """
     def __init__(self, input_images, ball_df, output_images_paths, transformations_df, features=None, model_name='unet_mobilenet'):
         self.features = features
@@ -41,9 +44,10 @@ class SceneDataset(Dataset):
     def __getitem__(self, idx):
         """
         Each item of dataset is composed by:
-        - Input image (scene) -> now features extracted from image
+        - Input (scene): depending on parameter model_name it will be input image or features extracted from image
         - Input image cropped (scene)
         - Output image cropped (shot)
+        - Mask: it is used in trainning to mask the output image
         """
         scene_id, shot_id, path = self.output_images_paths[idx]
         ball_data = self.df[self.df['image_name'] == shot_id]
@@ -57,24 +61,22 @@ class SceneDataset(Dataset):
         #input_image_c = load_image_jpg('scenes_aligned/' + scene_id + '/' + shot_id+'.jpg')
         #input_image_cropped = crop_center(input_image_c, ball_data)
 
-        # Load, transform and crop scene (input_image)
+        # Load, transform, crop and normalize scene (input_image_cropped)
         input_image = self.input_images[scene_id]
         input_image = apply_homography_transformation(input_image, H)
         input_image_cropped, mask = utils.crop_center(input_image, ball_data)
+        input_image_cropped = torch.from_numpy(input_image_cropped).permute(2, 0, 1).float() / 255.0
 
-        # Load and crop shot (output_image)
+        # Load, crop and normalize shot (output_image)
         output_image = utils.load_image(path)
         output_image, _ = utils.crop_center(output_image, ball_data)
-
-        # Normalize to [0,1]
-        input_image_cropped = torch.from_numpy(input_image_cropped).permute(2, 0, 1).float() / 255.0
         output_image = torch.from_numpy(output_image).permute(2, 0, 1).float() / 255.0
 
         if self.model_name == 'unet':
-            # we use the extracted features
+            # We use the extracted features
             input = self.features[scene_id]
         else:
-            # Resize, convert to tensor and normalize to mean and std of resnet
+            # Resize, convert to tensor and normalize to mean and std of ImageNet
             input_image = cv2.resize(input_image, (224,224), interpolation=cv2.INTER_AREA)
             input_image = torch.from_numpy(input_image).permute(2, 0, 1).float() / 255.0
             mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
@@ -85,7 +87,7 @@ class SceneDataset(Dataset):
 
 if __name__ == '__main__':
     # Load dataframes
-    ball_data = pd.read_csv('ball_data.csv')
+    ball_data = pd.read_csv('ball_data_corrected.csv')
     transformations_data = pd.read_csv('homography_transformation.csv')
 
     input_paths, output_paths = utils.get_image_paths(ball_data)
@@ -123,9 +125,9 @@ if __name__ == '__main__':
         print(f"Input cropped range: {input_cropped.min()} - {input_cropped.max()}")
 
         # Save grid of images
-        vutils.save_image(input_images, 'input_samples.png', nrow=4, normalize=True)
-        vutils.save_image(input_cropped, 'input_crop_samples.png', nrow=4, normalize=True)
-        vutils.save_image(output_cropped, 'output_samples.png', nrow=4, normalize=True)
+        #vutils.save_image(input_images[:, :3, :, :], 'input_samples.png', nrow=4, normalize=True)
+        vutils.save_image(input_cropped[:, :3, :, :], 'input_crop_samples.png', nrow=4, normalize=True)
+        vutils.save_image(output_cropped[:, :3, :, :], 'output_samples.png', nrow=4, normalize=True)
 
         if batch_idx == 0:  # check only first batch
             break
