@@ -22,6 +22,45 @@ import cv2
 import numpy as np
 
 
+def crop_image(image, cx, cy, crop_size=256):
+    h, w = image.shape[:2]
+    half_crop = crop_size // 2
+
+    # Compute cropping box
+    x1 = cx - half_crop
+    y1 = cy - half_crop
+    x2 = cx + half_crop
+    y2 = cy + half_crop
+
+    # Compute how much padding is needed
+    pad_left = max(0, -x1)
+    pad_top = max(0, -y1)
+    pad_right = max(0, x2 - w)
+    pad_bottom = max(0, y2 - h)
+
+    # Apply padding if needed
+    if any([pad_left, pad_top, pad_right, pad_bottom]):
+        image = cv2.copyMakeBorder(
+            image,
+            top=pad_top,
+            bottom=pad_bottom,
+            left=pad_left,
+            right=pad_right,
+            borderType=cv2.BORDER_CONSTANT,
+            value=[0, 0, 0]  # Black padding
+        )
+
+    # Adjust coordinates to the padded image
+    x1 += pad_left
+    y1 += pad_top
+    x2 += pad_left
+    y2 += pad_top
+
+    # Final 256x256 crop with no distortion
+    cropped_image = image[y1:y2, x1:x2]
+
+    return cropped_image
+
 def read_homography_from_csv(reader, scene, scene_id):
     for row in reader:
         # Check if the row matches the desired scene and scene_id
@@ -143,7 +182,8 @@ def load_image(path):
         height, width, channels = image.shape
         if width < height:
             image = np.rot90(image).copy()
-    return image
+    bgr_image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+    return bgr_image
 
 def load_input_scenes(input_paths):
     """
@@ -216,6 +256,36 @@ def create_full_ball_dataframe():
     return ball_data
 
 
+def get_new_image_paths(ball_data):
+    """
+    Returns:
+        - Dictionary of the paths for input images (scenes)
+        - List of tuples (scene_id, shot_id, path) for output images (shots)
+    """
+    input_paths = {}
+    output_paths = []
+    shots = ball_data['image_name'].values
+
+    # Go over each scene
+    for scene in os.listdir('scenes'):
+        input_path = os.path.join('scenes', scene)
+        scene_id = os.path.splitext(scene)[0]
+        input_paths[scene_id] = input_path
+
+        shots_dir = os.path.join('new', scene_id)
+        if not os.path.isdir(shots_dir):
+            continue  # Skip if scene shots folder does not exist
+
+        # Go over each shot
+        for shot in os.listdir(shots_dir):
+            shot_id = os.path.splitext(shot)[0]
+            if shot_id in shots:
+                output_path = os.path.join(shots_dir, shot)
+                if os.path.isfile(output_path):  # ✅ Check if file exists
+                    output_paths.append((scene_id, shot_id, output_path))
+
+    return input_paths, output_paths
+
 def get_image_paths(ball_data):
     """
     Returns:
@@ -231,7 +301,7 @@ def get_image_paths(ball_data):
         scene_id = os.path.basename(input_path)[:-4]
         input_paths[scene_id] = input_path
         scene_id = os.path.splitext(scene)[0]
-        shots_dir = os.path.join('scenes_shots', scene_id)
+        shots_dir = os.path.join('scene_shots_masked', scene_id)
 
         # Go over each shot
         for shot in os.listdir(shots_dir):
