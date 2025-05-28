@@ -3,6 +3,7 @@ import numpy as np
 import rawpy
 import os
 import csv
+from utils import apply_homography_transformation
 
 # Load the scene image 
 def load_scene(scene):
@@ -25,21 +26,6 @@ def load_scene_shot(scene_id, shot_id):
     if width < height:
         scene_shot_img = np.rot90(scene_shot_img)
     return scene_shot_img
-
-
-# Apply the homography transformation to the scene shot
-def apply_homography_transformation(scene_img, H):
-    try:
-        # Get the dimensions of the scene shot image
-        rows, cols, channels = scene_img.shape
-
-        # Use the homography matrix to transform the scene shot image into the scene
-        transformed_img = cv2.warpPerspective(scene_img, H, (cols, rows))
-
-        return transformed_img
-    except:
-        print('not transformed')
-        return scene_img
 
 # Function to read the homography matrix from the CSV file
 def read_homography_from_csv(file_path, scene, scene_id):

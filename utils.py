@@ -72,6 +72,22 @@ def read_homography_from_csv(reader, scene, scene_id):
             return H
     return None  # Return None if no matching row is found
 
+
+def apply_homography_transformation(scene_img, H):
+    """
+    Applies the homography transformation (H) to the scene image."""
+    try:
+        # Get the dimensions of the scene shot image
+        rows, cols, channels = scene_img.shape
+
+        # Use the homography matrix to transform the scene shot image into the scene
+        transformed_img = cv2.warpPerspective(scene_img, H, (cols, rows))
+
+        return transformed_img
+    except:
+        print('not transformed')
+        return scene_img
+
 def crop_center(image, ball_data, crop_size=(256, 256)):
     """
     Crops the image with the provided crop_size centered at the ball's center.
@@ -198,44 +214,6 @@ def load_input_scenes(input_paths):
         input_images[scene_id] = input_image
     return input_images
 
-def load_ball_transformation_data(path):
-    """
-    Returns:
-        Dataframe with the ball transformation data for one shot.
-    """
-    df = pd.read_csv(path)
-    return df
-
-def load_ball_position_data(path):
-    """
-    Returns:
-        Dataframe with the ball position data for one shot.
-    """
-    df = pd.read_csv(path)
-    df['image_name'] = df['image_name'].apply(lambda x: os.path.splitext(x)[0])
-    df = df[['image_name', 'circle_x', 'circle_y', 'circle_radiuos']]
-    return df
-
-def create_probability_map(df, binary=True):
-    """
-    Given the ball position df creates the mask for the ball.
-    """
-    x = df['circle_x'].values[0]
-    y = df['circle_y'].values[0]
-    radius = df['circle_radiuos'].values[0] + 50
-    xx, yy = np.meshgrid(np.arange(256), np.arange(256))
-    dist = np.sqrt((xx-x) ** 2 + (yy-y) ** 2)
-
-    if binary: # Binary mask: 1 inside circle, 0 outside
-        mask = (dist <= radius).astype(np.float32)
-
-    else: # Gaussian probability map
-        mask = np.exp(-dist ** 2 / (2 * (radius / 2) ** 2))
-        mask = mask.astype(np.float32)
-    mask = cv2.resize(mask, NEW_SIZE, interpolation=cv2.INTER_AREA)
-    return mask
-
-
 def create_full_ball_dataframe():
     """
     Only needs to be run once to create the ball data for all the shots.
@@ -249,7 +227,9 @@ def create_full_ball_dataframe():
     for scene in os.listdir('scenes'):
            
         scene_id = os.path.splitext(scene)[0]
-        df = load_ball_position_data(os.path.join('illumination_gt', scene_id + '.csv'))
+        df = pd.read_csv(os.path.join('illumination_gt', scene_id + '.csv'))
+        df['image_name'] = df['image_name'].apply(lambda x: os.path.splitext(x)[0])
+        df = df[['image_name', 'circle_x', 'circle_y', 'circle_radiuos']]
         ball_data = pd.concat([ball_data, df], axis=0)
 
     pd.save_csv(ball_data, 'ball_data.csv', index=False)

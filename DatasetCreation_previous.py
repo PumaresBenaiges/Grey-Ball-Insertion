@@ -13,8 +13,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import models
 
-
-from align_scenes import apply_homography_transformation
 import utils
 
 IM_SIZE=(2844,4284,3)
@@ -63,7 +61,7 @@ class SceneDataset(Dataset):
 
         # Load, transform, crop and normalize scene (input_image_cropped)
         input_image = self.input_images[scene_id]
-        input_image = apply_homography_transformation(input_image, H)
+        input_image = utils.apply_homography_transformation(input_image, H)
         input_image_cropped, mask = utils.crop_center(input_image, ball_data)
         input_image_cropped = torch.from_numpy(input_image_cropped).permute(2, 0, 1).float() / 255.0
 

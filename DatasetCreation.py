@@ -13,8 +13,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import models
 
-
-from align_scenes import apply_homography_transformation
 import utils
 
 IM_SIZE=(2844,4284,3)
@@ -57,15 +55,11 @@ class SceneDataset(Dataset):
         H_values = ball_transformation.iloc[0, 2:].values.tolist()
         H = np.array(H_values).reshape(3, 3)
 
-        # Load already transformed scenes
-        #input_image_c = load_image_jpg('scenes_aligned/' + scene_id + '/' + shot_id+'.jpg')
-        #input_image_cropped = crop_center(input_image_c, ball_data)
-
         # Load, crop and normalize shot (output_image)
         output_image_bgr = cv2.imread(path)
         output_image = cv2.cvtColor(output_image_bgr, cv2.COLOR_BGR2RGB)
 
-        # calculate mask
+        # Calculate mask
         non_black = np.any(output_image != [0, 0, 0], axis=-1)
         mask = non_black.astype(np.uint8) # Convert boolean mask to uint8: 1 for non-black, 0 for black
 
@@ -73,12 +67,12 @@ class SceneDataset(Dataset):
 
         # Load, transform, crop and normalize scene (input_image_cropped)
         input_image = self.input_images[scene_id]
-        input_image = apply_homography_transformation(input_image, H)
+        input_image = utils.apply_homography_transformation(input_image, H)
         cx = int(ball_data['circle_x'].iloc[0])
         cy = int(ball_data['circle_y'].iloc[0])
         input_image_cropped = utils.crop_image(input_image, cx, cy)
 
-        # convert to tensor
+        # Convert to tensor
         output_image = torch.from_numpy(output_image).permute(2, 0, 1).float() / 255.0
         input_image_cropped = torch.from_numpy(input_image_cropped).permute(2, 0, 1).float() / 255.0
 

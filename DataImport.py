@@ -87,7 +87,7 @@ def download_shots():
 
 if __name__ == '__main__':
     print('Download of scenes starting')
-    #download_scenes()
+    download_scenes()
     print('Download of scenes finished')
 
     print('Download of shots starting')

@@ -76,6 +76,11 @@ def train_model(epochs=100):
     fixed_mask = fixed_mask.clone().detach()  # <-- CHANGED
     fixed_val_mask = fixed_val_mask.clone().detach()  # <-- CHANGED
 
+    # Save train and val gt for visualization
+    save_image(fixed_target_image, f"train_gt.jpg", nrow=3, normalize=True)
+    save_image(fixed_val_target_image, f"val_gt.jpg", nrow=3, normalize=True)
+
+
     for epoch in range(epochs):
         print(f"Epoch {epoch + 1}/{epochs}")
         epoch_start_time = time.time()
@@ -120,13 +125,11 @@ def train_model(epochs=100):
                 fixed_mask_view = fixed_mask.view(fixed_mask.size(0), 1, fixed_mask.size(-2), fixed_mask.size(-1))
                 output_train = output_train * fixed_mask_view.expand(-1, 3, -1, -1)
                 save_image(output_train, f"train_out_{epoch}.jpg", nrow=3, normalize=True)
-                save_image(fixed_target_image, f"train_gt_{epoch}.jpg", nrow=3, normalize=True)
-
+                
                 output_val = model(fixed_val_input_cropped, fixed_val_input_image)
                 fixed_val_mask_view = fixed_val_mask.view(fixed_val_mask.size(0), 1, fixed_val_mask.size(-2), fixed_val_mask.size(-1))
                 output_val = output_val * fixed_val_mask_view.expand(-1, 3, -1, -1)
                 save_image(output_val, f"val_out_{epoch}.jpg", nrow=3, normalize=True)
-                save_image(fixed_val_target_image, f"val_gt_{epoch}.jpg", nrow=3, normalize=True)
 
         checkpoint = {
             'epoch': epoch + 1,
