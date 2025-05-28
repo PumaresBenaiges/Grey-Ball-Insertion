@@ -8,20 +8,22 @@ Pyton files:
 - **DataImport**: Downloads all the necessary images needed for the project into 2 new folders: scenes and scenes_shots.
 - **DatasetCreation**: Functions for creating a datset class with the previous downloaded data.
                    You will also need to download manually the zip folder "illumination_gt" and extract the files.
-- **Utils**: Set of functions used to load data or for the Dataset Creation.
-                  
-<<<<<<< HEAD
-=======
-- **Utils**: Set of functions used to load data or for the Dataset Creation.
-
->>>>>>> efd0d93 (Corrections)
+- **DatasetCreation_previous**: Functions for creating a datset class with the previous downloaded data.
+- **align_scenes**: functions to align the scenes with the precomputed transformations.
+- **ball_segment_anything**:
+- **print_res**:
+- **run_model**:
+- **train_unet**: it contrains the code for trainning the unet.
+- **train_unet_mobilenet**: for trainning unet+mobilenetv3.
 - **unet**: it contains 2 different models.
     - The unet: Features are computed at begging and passed to the model and concatenated in the bottleneck.
     - The unet with mobilnet for feature extraction, with the aim to train both.
-- **train_unet**: it contrains the code for trainning the unet.
-- **train_unet_mobilenet**: for trainning unet+mobilenetv3.
-<<<<<<< HEAD
-- **align_scenes**: functions to align the scenes with the precomputed transformations.
-=======
-- **align_scenes**: functions to align the scenes with the precomputed transformations.
->>>>>>> efd0d93 (Corrections)
+- **Utils**: Set of functions used to load data or for the Dataset Creation.
+- **yolo_find_center_ball_test.py**:
+
+
+CSV files:
+- **ball_data_modified.csv**:
+- **homography_transformations_csv**:
+
+
