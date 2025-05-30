@@ -6,13 +6,21 @@ Dataset:
   
 Pyton files:
 
+Dataset diagnostic 
+- **Image_check_ID**: logs the missing scene shots IDs in a file named Image_check_results.txt.
+- **Transformation**: visually verify that the homography transformation correctly aligns the reference scene with each scene shot.
+
 Preprocessing:
 - **DataImport**: Downloads all the necessary images needed for the project into 2 new folders: scenes and scenes_shots.
   You will also need to download manually the zip folder "illumination_gt" and extract the files.
 
 - **align_scenes**:  to apply H to all scenes and save transformed scenes if you have enough memory in computer. WE CAN ACTUALLY DELETE THIS FILE?
-- **ball_segment_anything**: ?
-- **yolo_find_center_ball_test.py**: ?
+- **ball_segment_anything**: use the Segment Anything Model (SAM) in order to:
+- **Feature_Matching_fast**: compute and save to CSV fie geometric transformations between reference scenes and real-world shots
+
+  - Crop and mask images to isolate the ball in each scene shot, then save these edited images in a separate folder. 
+
+  -  Calculate the new center position of the ball and determine its radius. Save this information in a CSV file.
 
 Model trainning:
 - **DatasetCreation**: Functions for creating the dataset class (final approach).
@@ -22,11 +30,12 @@ Model trainning:
     - The unet: Features are computed at begging and passed to the model and concatenated in the bottleneck.
     - The unet with mobilnet for feature extraction, with the aim to train both.
 
-- **run_model**: it contains the code for trainning unet+mobilenetv3 on the final approach.
 - **train_unet**: it contrains the code for trainning the unet (mobilenet features are precomputed and stored).
 - **train_unet_mobilenet**: for trainning unet+mobilenetv3.
-- **print_res**: ? 
 
+Display results:
+- **overlay_model_results**: overlay output of the model over the background image.
+- **print_tensorboard_logs**: print tensorbard logs
 
 CSV files:
 - **ball_data_modified.csv**: File obtained from running ?. It contains center coordinates and radious of the ball and they are used to crop the images.
