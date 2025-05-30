@@ -8,6 +8,5 @@ ball_data.csv
 .venv/
 .idea/
 *.NEF
-*.pt
 *jpg
 model_visualization
