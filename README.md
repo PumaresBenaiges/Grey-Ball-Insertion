@@ -14,7 +14,6 @@ Preprocessing:
 - **DataImport**: Downloads all the necessary images needed for the project into 2 new folders: scenes and scenes_shots.
   You will also need to download manually the zip folder "illumination_gt" and extract the files.
 
-- **align_scenes**:  to apply H to all scenes and save transformed scenes if you have enough memory in computer. WE CAN ACTUALLY DELETE THIS FILE?
 - **ball_segment_anything**: use the Segment Anything Model (SAM) in order to:
 - **Feature_Matching_fast**: compute and save to CSV fie geometric transformations between reference scenes and real-world shots
 
@@ -38,7 +37,7 @@ Display results:
 - **print_tensorboard_logs**: print tensorbard logs
 
 CSV files:
-- **ball_data_modified.csv**: File obtained from running ?. It contains center coordinates and radious of the ball and they are used to crop the images.
-- **homography_transformations_csv**: File obtained from running ?. It is used in order to transform the scenes so they match the position of scene shots.
+- **ball_data_modified.csv**: contains center coordinates and radious of the ball and they are used to crop the images.
+- **homography_transformations_csv**: contains homography transformation matrixes to align scene with scene shots.
 
 
