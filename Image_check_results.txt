@@ -1,0 +1,64 @@
+Checking images for folder: A&W1
+[] has no coordinates.
+Checking images for folder: A&W2
+[] has no coordinates.
+Checking images for folder: A&W3
+[] has no coordinates.
+Checking images for folder: Harbour1
+['DSC_1661', 'DSC_1708', 'DSC_1657', 'DSC_1656', 'DSC_1744', 'DSC_1742', 'DSC_1743', 'DSC_1658', 'DSC_1655'] has no coordinates.
+Checking images for folder: Harbour2
+['DSC_1918', 'DSC_1917'] has no coordinates.
+Checking images for folder: Harbour3
+['DSC_2094', 'DSC_2093', 'DSC_2097', 'DSC_2099', 'DSC_2092', 'DSC_2098', 'DSC_2157'] has no coordinates.
+Checking images for folder: Harbour4
+['DSC_2195', 'DSC_2269', 'DSC_2231'] has no coordinates.
+Checking images for folder: SFU_art
+[] has no coordinates.
+Checking images for folder: blue_ceiling
+['DSC_8747', 'DSC_8748', 'DSC_8749', 'DSC_8746'] has no coordinates.
+Checking images for folder: dining_area
+[] has no coordinates.
+Checking images for folder: downtown_smith
+['DSC_0330', 'DSC_0366', 'DSC_0463', 'DSC_0471', 'DSC_0465', 'DSC_0285', 'DSC_0478', 'DSC_0336', 'DSC_0427', 'DSC_0410', 'DSC_0303', 'DSC_0468', 'DSC_0315', 'DSC_0425', 'DSC_0383', 'DSC_0405', 'DSC_0288', 'DSC_0293', 'DSC_0361', 'DSC_0363', 'DSC_0334', 'DSC_0318', 'DSC_0477', 'DSC_0424', 'DSC_0295', 'DSC_0272', 'DSC_0470', 'DSC_0407', 'DSC_0382', 'DSC_0317', 'DSC_0319', 'DSC_0408', 'DSC_0332', 'DSC_0430', 'DSC_0440', 'DSC_0331', 'DSC_0313', 'DSC_0298', 'DSC_0329', 'DSC_0365', 'DSC_0429', 'DSC_0286', 'DSC_0267', 'DSC_0292', 'DSC_0411', 'DSC_0412', 'DSC_0268', 'DSC_0291', 'DSC_0362', 'DSC_0417', 'DSC_0290', 'DSC_0287', 'DSC_0335', 'DSC_0316', 'DSC_0426', 'DSC_0300', 'DSC_0367', 'DSC_0442', 'DSC_0472', 'DSC_0419', 'DSC_0296', 'DSC_0297', 'DSC_0414', 'DSC_0289', 'DSC_0381', 'DSC_0418', 'DSC_0305', 'DSC_0406', 'DSC_0432', 'DSC_0269', 'DSC_0337', 'DSC_0328', 'DSC_0271', 'DSC_0338', 'DSC_0466', 'DSC_0423', 'DSC_0473', 'DSC_0301', 'DSC_0409', 'DSC_0384', 'DSC_0333', 'DSC_0415', 'DSC_0270', 'DSC_0364', 'DSC_0294', 'DSC_0475', 'DSC_0416', 'DSC_0308', 'DSC_0299', 'DSC_0360', 'DSC_0439', 'DSC_0314', 'DSC_0321', 'DSC_0413'] has no coordinates.
+Checking images for folder: edu_area
+[] has no coordinates.
+Checking images for folder: foodcourt_mcnz
+['DSC_1575', 'DSC_1529', 'DSC_1534', 'DSC_1564', 'DSC_1528', 'DSC_1547', 'DSC_1545', 'DSC_1453', 'DSC_1531', 'DSC_1556', 'DSC_1400', 'DSC_1562', 'DSC_1546', 'DSC_1535', 'DSC_1563', 'DSC_1544', 'DSC_1557', 'DSC_1573', 'DSC_1561', 'DSC_1527', 'DSC_1560', 'DSC_1530'] has no coordinates.
+Checking images for folder: hallway
+[] has no coordinates.
+Checking images for folder: image_theater
+['DSC_9750', 'DSC_9936', 'DSC_9734', 'DSC_9939', 'DSC_9935', 'DSC_9928', 'DSC_9933', 'DSC_9921', 'DSC_9913', 'DSC_9924', 'DSC_9937', 'DSC_9910', 'DSC_9926', 'DSC_9915', 'DSC_9922', 'DSC_9930', 'DSC_9914', 'DSC_9762', 'DSC_9912', 'DSC_9927', 'DSC_9919', 'DSC_9761', 'DSC_9920', 'DSC_9934', 'DSC_9917', 'DSC_9932', 'DSC_9911', 'DSC_9938', 'DSC_9929', 'DSC_9763', 'DSC_9805'] has no coordinates.
+Checking images for folder: owl_statue
+['DSC_9038', 'DSC_9037', 'DSC_9035', 'DSC_9039', 'DSC_9036'] has no coordinates.
+Checking images for folder: playground
+['DSC_9204', 'DSC_9143'] has no coordinates.
+Checking images for folder: rugs
+[] has no coordinates.
+Checking images for folder: seat_rows
+['DSC_0127', 'DSC_0111', 'DSC_0110', 'DSC_0102', 'DSC_0103'] has no coordinates.
+Checking images for folder: study_area
+[] has no coordinates.
+Checking images for folder: stump
+[] has no coordinates.
+Checking images for folder: subway1
+[] has no coordinates.
+Checking images for folder: subway2
+[] has no coordinates.
+Checking images for folder: theater
+['DSC_8439'] has no coordinates.
+Checking images for folder: tree_tunel
+[] has no coordinates.
+Checking images for folder: uncle_faith1
+[] has no coordinates.
+Checking images for folder: uncle_faith2
+[] has no coordinates.
+Checking images for folder: under_tree2
+['DSC_7959', 'DSC_7920', 'DSC_7954', 'DSC_7916', 'DSC_7957', 'DSC_7924', 'DSC_7958', 'DSC_7960', 'DSC_7961'] has no coordinates.
+Checking images for folder: wall_art
+['DSC_8906', 'DSC_8908'] has no coordinates.
+Checking images for folder: wall_hallway
+['DSC_6910'] has no coordinates.
+Checking images for folder: wall_lab
+['DSC_6854', 'DSC_6853', 'DSC_6855', 'DSC_6856'] has no coordinates.
+
+Completed checking images.
