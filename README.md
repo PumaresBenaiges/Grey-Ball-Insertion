@@ -58,11 +58,11 @@ python overlay_model_results.py
 - **DatasetCreation_previous**: Functions for creating a dataset class (first approach).
 - **Utils**: Set of functions that are used in other files.
 - **unet**: it contains 2 different models.
-    - The unet: Features are computed at begging and passed to the model and concatenated in the bottleneck.
+    - The unet: Features are computed in the beginning and passed to the model and concatenated in the bottleneck.
     - The unet with mobilnet for feature extraction, with the aim to train both.
 
-- **train_unet**: it contrains the code for trainning the unet (mobilenet features are precomputed and stored).
-- **train_unet_mobilenet**: for trainning unet+mobilenetv3.
+- **train_unet**: it contrains the code for training the unet (mobilenet features are precomputed and stored).
+- **train_unet_mobilenet**: for training unet+mobilenetv3.
 
 ### Display results:
 - **overlay_model_results**: overlay output of the model over the background image.
